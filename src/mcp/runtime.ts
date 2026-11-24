@@ -809,7 +809,10 @@ export class McpRuntime<Auth extends Record<string, unknown> | undefined> {
     server.setRequestHandler('resources/read', async (request) => {
       for (const extension of extensions) {
         const contents = await extension.readResource?.(request.params.uri, session);
-        if (contents) return { contents } as never;
+        if (contents)
+          return {
+            contents: contents.map((entry) => ({ ...entry, uri: entry.uri ?? request.params.uri })),
+          } as never;
       }
       const resource = resources.get(request.params.uri);
       if (!resource) {

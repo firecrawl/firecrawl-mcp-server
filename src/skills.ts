@@ -28,7 +28,21 @@ type SkillCatalog = {
   files: Map<string, ResourceResult>;
 };
 
-const CACHE_HINT = { ttlMs: 300_000, cacheScope: 'public' } as const;
+const CACHE_HINT = { ttlMs: 300_000, cacheScope: 'private' } as const;
+const utf8 = new TextDecoder('utf-8', { fatal: true });
+
+function fileContent(uri: string, path: string, content: string | Uint8Array): ResourceResult {
+  const mimeType = path.endsWith('.md') ? 'text/markdown' : undefined;
+  let text = typeof content === 'string' ? content : undefined;
+  if (text === undefined) {
+    try {
+      text = utf8.decode(content as Uint8Array);
+    } catch {
+      return { uri, blob: Buffer.from(content).toString('base64'), mimeType: mimeType ?? 'application/octet-stream' };
+    }
+  }
+  return { uri, text, ...(mimeType ? { mimeType } : {}) };
+}
 const listParams = z.looseObject({ cursor: z.string().optional() });
 const getParams = z.looseObject({ uri: z.string() });
 const anyResult = z.record(z.string(), z.unknown());
@@ -43,13 +57,8 @@ export async function loadSkillCatalog(skills: SkillDefinition[]): Promise<Skill
       for (const [path, content] of Object.entries(skill.files)) {
         const uri = `skill://${skill.path}/${path}`;
         if (!listed.has(uri)) throw new Error(`Skill ${skill.path}: ${path} is not addressable as ${uri}`);
-        const mimeType = path.endsWith('.md') ? 'text/markdown' : undefined;
-        files.set(
-          uri,
-          typeof content === 'string'
-            ? { uri, text: content, ...(mimeType ? { mimeType } : {}) }
-            : { uri, blob: Buffer.from(content).toString('base64'), mimeType: mimeType ?? 'application/octet-stream' }
-        );
+        if (files.has(uri)) throw new Error(`Skill ${skill.path}: ${uri} is served twice`);
+        files.set(uri, fileContent(uri, path, content));
       }
       return entry;
     })

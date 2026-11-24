@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { SkillsClient } from '@modelcontextprotocol/client/ext/skills';
+import { z } from 'zod';
 import { createFirecrawlMcpServer } from '../dist/server.js';
 import { getFreePort } from './helpers/exchange-mcp.mjs';
 
@@ -82,7 +83,7 @@ test('skills are listed in the given order, fetched and read with verified diges
   const { skill, ttlMs, cacheScope } = await skills.get('skill://lookup/SKILL.md');
   assert.equal(skill.frontmatter.name, 'lookup');
   assert.equal(typeof ttlMs, 'number');
-  assert.equal(cacheScope, 'public');
+  assert.equal(cacheScope, 'private');
 
   await assert.rejects(skills.get('skill://missing/SKILL.md'), (error) => error.code === -32602);
 });
@@ -99,12 +100,35 @@ test('2025-era sessions see no skills capability and no skills methods', async (
   const legacy = await connect(t, port, 'legacy');
   assert.equal(legacy.getServerCapabilities()?.extensions, undefined);
   assert.equal(new SkillsClient(legacy).supported, false);
+  await assert.rejects(legacy.request({ method: 'skills/list', params: {} }, z.object({}).loose()), (error) => error.code === -32601);
 });
 
 test('serveSkills leaves a session without the extension or the files', async (t) => {
   const client = await connect(t, await start(t, { skills: [ROUTER], serveSkills: () => false }));
   assert.equal(client.getServerCapabilities()?.extensions?.[SKILLS], undefined);
   await assert.rejects(client.readResource({ uri: 'skill://router/SKILL.md' }));
+});
+
+test('a skill given twice makes start reject', async (t) => {
+  const instance = createFirecrawlMcpServer({
+    transport: 'httpStream',
+    apiKey: 'fc-skills-test',
+    modernProtocol: true,
+    unstable_hooks: { skills: [LOOKUP, LOOKUP] },
+  });
+  await assert.rejects(
+    instance.start({
+      transportType: 'httpStream',
+      httpStream: { port: await getFreePort(), host: '127.0.0.1', endpoint: '/v2/mcp', stateless: true },
+    })
+  );
+});
+
+test('UTF-8 bytes are served as text', async (t) => {
+  const bytes = { path: 'lookup', files: { 'SKILL.md': new TextEncoder().encode(LOOKUP.files['SKILL.md']) } };
+  const client = await connect(t, await start(t, { skills: [bytes] }));
+  const { contents } = await client.readResource({ uri: 'skill://lookup/SKILL.md' });
+  assert.equal(contents[0].text, LOOKUP.files['SKILL.md']);
 });
 
 test('a skill whose folder does not match its name makes start reject', async (t) => {

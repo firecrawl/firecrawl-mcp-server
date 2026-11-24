@@ -4,11 +4,7 @@
 
 ### Added
 
-- The `skills` hook of `unstable_hooks` serves Agent Skills through the MCP Skills extension (`io.modelcontextprotocol/skills`, SEP-2640) on protocol revision 2026-07-28, with `modernProtocol` on. Each skill is `{ path, files }`: `skills/list` returns the entries in the order given, each with its frontmatter and the digest and size of every file, `skills/get` returns one by its `skill://<path>/SKILL.md` URI (an unknown URI is `-32602`), and `resources/read` serves the files. `server/discover` declares the extension and `resources`; skill files are not added to `resources/list`. `serveSkills(session)` limits the skills to the sessions it returns true for; other sessions see neither the extension nor the files. A skill that breaks the Agent Skills format makes `start` reject. Servers without the hook, and every 2025-era session, are unchanged: same `initialize` result, tools, resources and instructions.
-
-### Changed
-
-- `@modelcontextprotocol/server` and `@modelcontextprotocol/client` 2.4.0, the release that adds the Skills extension.
+- The `skills` hook of `unstable_hooks` serves Agent Skills through the MCP Skills extension (`io.modelcontextprotocol/skills`, SEP-2640) on protocol revision 2026-07-28, with `modernProtocol` on. Each skill is `{ path, files }`: `skills/list` returns the entries in the order given, each with its frontmatter and the digest and size of every file, `skills/get` returns one by its `skill://<path>/SKILL.md` URI (an unknown URI is `-32602`), and `resources/read` serves the files (as text when they are UTF-8). Results carry `cacheScope: "private"`, since `serveSkills` can make them differ per session. Two skills at the same path make `start` reject. `server/discover` declares the extension and `resources`; skill files are not added to `resources/list`. `serveSkills(session)` limits the skills to the sessions it returns true for; other sessions see neither the extension nor the files. A skill that breaks the Agent Skills format makes `start` reject. Servers without the hook, and every 2025-era session, are unchanged: same `initialize` result, tools, resources and instructions.
 
 ### Fixed
 
@@ -17,6 +13,7 @@
 
 ### Changed
 
+- `@modelcontextprotocol/server` and `@modelcontextprotocol/client` 2.4.0, the release that adds the Skills extension.
 - `alexandria_library_search`'s description opens with the data source instead of the skills. Its first sentence now says to find the data source for the task first, with `grep -ril "<word>" /library`; the skills under `/library/skills` come second, for a step-by-step workflow or to explore, with the same `cat /library/skills/search/<words>` lookup. The server instructions of sessions that list the skills change the same way: their sentence on checking `/library/skills` first now names the data source first and the skills second. The opening is as long as before, everything after it is unchanged, and so are the input schema, the annotations and the tool's behaviour.
 - `people_company_enrich`'s description no longer says a work email is always on the company domain when one is known. It says the address is on the company domain when one is found there, and that otherwise an address at another employer may be returned with `domain_match` false and `warning` `"employer_mismatch"` in `fields.work_email`, to be treated as unconfirmed. Only the description text changes; the input and output schemas and the tool's behaviour are unchanged.
 
