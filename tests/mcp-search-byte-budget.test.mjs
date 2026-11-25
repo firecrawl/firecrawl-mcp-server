@@ -36,11 +36,19 @@ function smallSearchResponse() {
   };
 }
 
-async function startServer(t, searchResponse) {
+async function startServer(t, searchResponse, skills = []) {
   const api = createServer(async (req, res) => {
-    for await (const chunk of req) void chunk;
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    const findSkills = req.url === '/v2/scrape' && body.includes('"find-skills"');
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(req.url === '/v2/search' ? searchResponse : { success: true }));
+    res.end(JSON.stringify(
+      req.url === '/v2/search'
+        ? searchResponse
+        : findSkills
+          ? { success: true, data: { creditsCost: 0, alexandria: [{ provider: 'firecrawl', capability: 'find-skills', creditsCost: 0, data: { skills, total: skills.length } }] } }
+          : { success: true }
+    ));
   });
   await new Promise((resolve) => api.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise((resolve) => api.close(resolve)));
@@ -58,7 +66,7 @@ async function startServer(t, searchResponse) {
   t.after(() => stopChild(child));
   await waitForHealth(port, child);
 
-  return async (userAgent) => {
+  return async (userAgent, query = 'example') => {
     const response = await fetch(`http://127.0.0.1:${port}/v2/mcp`, {
       body: JSON.stringify({
         id: 1,
@@ -66,7 +74,7 @@ async function startServer(t, searchResponse) {
         method: 'tools/call',
         params: {
           name: 'firecrawl_search',
-          arguments: { query: 'example', limit: 10, scrapeOptions: { formats: ['markdown', 'links'] } },
+          arguments: { query, limit: 10, scrapeOptions: { formats: ['markdown', 'links'] } },
         },
       }),
       headers: {
@@ -117,6 +125,17 @@ test('a 1.8 MB search result comes back under the byte budget for a capped clien
     assert.ok(original.markdown.startsWith(item.markdown.slice(0, item.markdown.lastIndexOf('\n\n[Truncated'))));
     assert.deepEqual(item.links, original.links);
   }
+});
+
+test('skills listed beside a search count toward the byte budget', async (t) => {
+  const skill = { id: 'page-audit', name: 'Page audit', description: 'Audit a set of pages.', files: ['SKILL.md'], source: 'library', similarity: 0.7 };
+  const search = await startServer(t, largeSearchResponse(), [skill]);
+  const result = await search(CAPPED_USER_AGENT, 'audit these example pages');
+  assert.ok(resultBytes(result) <= BUDGET, 'result is ' + resultBytes(result) + ' bytes');
+  const body = JSON.parse(result.content[0].text);
+  assert.equal(Object.keys(body.data)[0], 'skills');
+  assert.equal(body.data.skills.matches[0].name, 'Page audit');
+  assert.equal(body.data.web.length, 10);
 });
 
 test('when results alone overflow the budget, the lowest-ranked ones are left out', async (t) => {

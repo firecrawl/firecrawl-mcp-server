@@ -2051,25 +2051,27 @@ Returns result groups in \`data\` and an operation \`id\`.
       };
       const byteBudget = searchByteBudget(session?.clientUserAgent);
       const searchResult = (response: unknown, skills: any[] = []) => {
-        const shown = annotateResultPositions(withoutDiscoveredToolPrices(response));
-        const fitted: any = byteBudget ? fitSearchResponse(shown, byteBudget) : shown;
-        if (!skills.length || !fitted?.data || typeof fitted.data !== 'object' || Array.isArray(fitted.data)) return structuredCompact(fitted);
+        const shown: any = annotateResultPositions(withoutDiscoveredToolPrices(response));
         // Skills that fit the query lead the results, each with the call that reads it.
-        return structuredCompact({
-          ...fitted,
-          data: {
-            skills: {
-              instruction:
-                'Written instructions that fit this search. Read the best match before going further and follow it instead of improvising: it names the capabilities to call and what to return.',
-              matches: skills.map((skill: any) => ({
-                name: skill.name,
-                description: skill.description,
-                nextTool: { name: ALEXANDRIA_LIBRARY_TOOL, arguments: { command: `cat ${skillPath(skill.id)}` } },
-              })),
-            },
-            ...fitted.data,
-          },
-        });
+        const listed =
+          skills.length && shown?.data && typeof shown.data === 'object' && !Array.isArray(shown.data)
+            ? {
+                ...shown,
+                data: {
+                  skills: {
+                    instruction:
+                      'Written instructions that fit this search. Read the best match before going further and follow it instead of improvising: it names the capabilities to call and what to return.',
+                    matches: skills.map((skill: any) => ({
+                      name: skill.name,
+                      description: skill.description,
+                      nextTool: { name: ALEXANDRIA_LIBRARY_TOOL, arguments: { command: `cat ${skillPath(skill.id)}` } },
+                    })),
+                  },
+                  ...shown.data,
+                },
+              }
+            : shown;
+        return structuredCompact(byteBudget ? fitSearchResponse(listed, byteBudget) : listed);
       };
       const exchangeSource = hasAlexandria(searchBody.sources);
       if (exchangeSource || searchBody.domainTools)

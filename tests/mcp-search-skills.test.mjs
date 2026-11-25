@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { LEGACY_SURFACE, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
+import { startFakeExchangeApi } from './helpers/exchange-api.mjs';
+import { LEGACY_SURFACE, startStdio, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
 
 const QUERY = 'next FOMC meeting rate odds fedwatch';
 const call = (client, name, args) => client.request('tools/call', { name, arguments: args });
@@ -26,6 +27,14 @@ test('a search lists the skills that fit its query first, each with the call tha
   // The lookup carries the query and nothing else from the call.
   assert.deepEqual(lookups(api).map((request) => request.body.alexandria.options), [{ query: QUERY, related: true }]);
   assert.doesNotMatch(JSON.stringify(lookups(api)[0].body), /client note/);
+});
+
+test('the lookup is asked with the trimmed query, cut to 200 characters', async (t) => {
+  const { api, client } = await startStdioWithApi(t, found([FITS]));
+  const long = QUERY + ' ' + 'and the market-implied path after it '.repeat(8).trim();
+  await search(client, { query: '   ' + long + '   ' });
+  assert.ok(long.length > 200);
+  assert.deepEqual(lookups(api).map((request) => request.body.alexandria.options.query), [long.slice(0, 200)]);
 });
 
 test('a skill needs a closer fit under a search than under a library command', async (t) => {
@@ -73,7 +82,13 @@ test('the search answers without the skills when the lookup is slow, fails, is r
   }
 });
 
-test('no lookup for a short query, a server without library skills, or a surface without the library tool', async (t) => {
+test('no lookup without a credential, for a short query, on a server without library skills, or on a surface without the library tool', async (t) => {
+  const api = await startFakeExchangeApi(found([FITS]));
+  t.after(() => api.close());
+  const keyless = await startStdio(t, { CLOUD_SERVICE: 'false', FIRECRAWL_API_KEY: '', FIRECRAWL_OAUTH_TOKEN: '', FIRECRAWL_API_URL: api.url });
+  assert.equal(toolText(await search(keyless.client)).data.skills, undefined);
+  assert.equal(lookups(api).length, 0);
+
   const short = await startStdioWithApi(t, found([FITS]));
   assert.equal(toolText(await search(short.client, { query: 'fed cpi' })).data.skills, undefined);
   assert.equal(lookups(short.api).length, 0);
