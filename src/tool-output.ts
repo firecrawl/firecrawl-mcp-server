@@ -437,7 +437,8 @@ export const researchSearchOutputSchema = z
 
 export const researchPaperOutputSchema = z
   .object({
-    paper: paperSchema.optional().describe('Canonical metadata for the requested paper, absent when it was not found.'),
+    // A direct object property is advertised closed, unlike the array items above, so it is parsed closed too.
+    paper: z.object(paperSchema.shape).optional().describe('Canonical metadata for the requested paper, absent when it was not found.'),
   })
   .describe('Canonical metadata for one paper.');
 

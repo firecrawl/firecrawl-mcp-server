@@ -193,6 +193,48 @@ test('people search sends one search/auto call with the normalized input and ret
   assert.doesNotMatch(JSON.stringify(data.results), /@/);
 });
 
+// A client that listed the tools checks each result against the listed output schema, which
+// refuses keys it does not name at the top level and inside chain.
+const waterfallAnswer = (data) => (batch) => ({
+  json: { success: true, data: { alexandria: batch.map((call) => ({ provider: call.provider, capability: call.capability, creditsCost: 0, data })) } },
+});
+
+test('a search that chained a company search into a people search passes the listed output schema', async (t) => {
+  const chain = { company: { industries: ['Management Consulting'], headcount: { min: 50, max: 1000 } }, people: { titles: ['CFO'] } };
+  const answer = {
+    results: [{ name: 'Ada Lovelace', title: 'CFO', title_match: 'current', company_domain: 'acme.example', source: 'leadsforge' }],
+    count: 1,
+    providers: [
+      { name: 'companyenrich', capability: 'companies/search', leg: 'company', status: 'rows', returned: 1, credits: 1 },
+      { name: 'leadsforge', capability: 'people/search', leg: 'people', status: 'rows', returned: 1, credits: 1 },
+    ],
+    chain,
+    credits: 2,
+    added_later: true,
+  };
+  const api = await startApi(t, waterfallAnswer(answer));
+  const client = await connect(t, { apiUrl: api.url });
+  await client.listTools();
+  const result = await client.callTool({
+    name: 'people_company_search',
+    arguments: { entity: 'person', filters: { titles: ['CFO'], industries: ['Management Consulting'], headcount: { min: 50, max: 1000 } } },
+  });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  const { added_later, ...declared } = answer;
+  assert.deepEqual(result.structuredContent, { ...declared, chain: {} });
+  assert.deepEqual(JSON.parse(result.content[0].text), answer);
+});
+
+test('an enrich answer with a top-level key the schema does not name passes the listed output schema', async (t) => {
+  const api = await startApi(t, waterfallAnswer({ ...WATERFALL_RESULT, added_later: true }));
+  const client = await connect(t, { apiUrl: api.url });
+  await client.listTools();
+  const result = await client.callTool({ name: 'people_company_enrich', arguments: { people: [{ name: 'Ada Lovelace', domain: 'acme.example' }] } });
+  assert.notEqual(result.isError, true, JSON.stringify(result));
+  assert.deepEqual(result.structuredContent, WATERFALL_RESULT);
+  assert.equal(JSON.parse(result.content[0].text).added_later, true);
+});
+
 test('a search refusal from the waterfall reaches the agent with its code', async (t) => {
   const api = await startApi(t);
   const events = [];

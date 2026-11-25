@@ -20,6 +20,7 @@ import {
   UserError as RuntimeUserError,
 } from './mcp/runtime.js';
 import { jobFailed, tasksExtension, type TaskHandler } from './tasks.js';
+import { loadSkillCatalog, skillsExtension, type SkillDefinition } from './skills.js';
 import { strictJsonSchema, toJsonSchema } from 'xsschema';
 import type { IncomingHttpHeaders } from 'http';
 import { readFile } from 'node:fs/promises';
@@ -433,6 +434,15 @@ export interface FirecrawlMcpServerHooks {
     context: ExtraToolsContext
   ) => void;
   registerResources?: (registrar: ResourceRegistrar) => void;
+  /**
+   * Agent Skills served through the Skills extension
+   * (`io.modelcontextprotocol/skills`) on protocol revision 2026-07-28, with
+   * `modernProtocol` on. `skills/list` keeps this order. A skill that breaks
+   * the Agent Skills format makes `start` reject.
+   */
+  skills?: SkillDefinition[];
+  /** Whether a session is served `skills`; unset, every 2026-07-28 session is. */
+  serveSkills?: (session: SessionData | undefined) => boolean;
   /** Credential and headers for each Firecrawl API request of a session. */
   outboundRequest?: (
     session: SessionData | undefined
@@ -547,6 +557,7 @@ export { normalizeHeader, withoutTrailingSlash } from './headers.js';
 export { acceptedContent, inputRequired, inputResponse } from '@modelcontextprotocol/server';
 export type { DeferredResult, ModernRequest } from './mcp/runtime.js';
 export type { TaskCaller, TaskHandler, TaskState } from './tasks.js';
+export type { SkillDefinition } from './skills.js';
 export { TASKS_EXTENSION } from './tasks.js';
 export { escapeWWWAuthenticateValue } from './mcp/www-authenticate.js';
 export {
@@ -674,7 +685,7 @@ const OUT_OF_CREDITS_INSTRUCTION =
   'If Firecrawl reports that credits ran out or the daily limit without an account was reached, end your final answer with the line it provides, link included.';
 // The Alexandria sentences name the tools a surface registers; everything else is shared.
 const fullProfileInstructions = (tools: AlexandriaTools, skills: boolean, saveSkill: boolean) =>
-  `${OUT_OF_CREDITS_INSTRUCTION} ${tools === 'dedicated' && skills ? `Check ${SKILLS_ROOT} through alexandria_library_search first for any business workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring) and follow a matching skill instead of improvising. ` : ''}Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match operation to tool: firecrawl_scrape retrieves one supplied page, firecrawl_map lists a site's URLs without content, and firecrawl_agent returns structured data from multi-source research when the URLs are unknown or the answer spans several sites, read with firecrawl_agent_status. Authenticated firecrawl_search also returns matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider returns the same fields for several entities, provenance, exact figures or timestamps, or many records through ${tools === 'dedicated' ? 'alexandria_library_read' : 'firecrawl_scrape'} with its published contract. If web results already answer the question, use them. ${tools === 'dedicated'
+  `${OUT_OF_CREDITS_INSTRUCTION} ${tools === 'dedicated' && skills ? `Find a task's data source through alexandria_library_search first; for a step-by-step workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring) or to explore, check ${SKILLS_ROOT} there. ` : ''}Firecrawl provides web search, page retrieval, site URL discovery, multi-page collection, structured page data, monitoring, and multi-source research that returns structured data. Match operation to tool: firecrawl_scrape retrieves one supplied page, firecrawl_map lists a site's URLs without content, and firecrawl_agent returns structured data from multi-source research when the URLs are unknown or the answer spans several sites, read with firecrawl_agent_status. Authenticated firecrawl_search also returns matching Alexandria providers in data.tools. ${ALEXANDRIA_CATALOGUE_SENTENCE} A matching provider returns the same fields for several entities, provenance, exact figures or timestamps, or many records through ${tools === 'dedicated' ? 'alexandria_library_read' : 'firecrawl_scrape'} with its published contract. If web results already answer the question, use them. ${tools === 'dedicated'
     ? 'Before scraping the same fields from several pages, alexandria_library_search checks for free whether a provider covers them; a read-only shell over the library, it also reads a contract that was not returned in full.'
     : 'For the same fields across several pages, firecrawl_find_tools offers free provider discovery and browses the catalogue by category.'} ${ALEXANDRIA_SOURCES_ALWAYS_ON} If no provider fits, continue with web search or firecrawl_agent. For biomedical, life-science, clinical, or arXiv literature, the firecrawl_research_* paper tools search an index of abstracts and full text and firecrawl_research_lookup_protein gives one named protein's UniProtKB/Swiss-Prot curated location and function; firecrawl_search with categories: ["research"] is a website filter over ordinary web results and reaches different sources. For programming questions, firecrawl_developer_search or categories: ["developer"] on firecrawl_search searches public repos, GitHub issues, merged PRs, READMEs and code docs. For legal or regulatory questions, firecrawl_gov_search searches US federal, state and local primary law; categories: ["gov"] on firecrawl_search reaches the same sources and cannot be combined with others. ${tools === 'dedicated'
     ? 'alexandria_library_search holds each contract at /library/<category>/<provider>/<capability>.md, and alexandria_library_read with calls: [{provider, capability, options}] runs up to ten capabilities.'
@@ -803,6 +814,8 @@ export function createFirecrawlMcpServer(
   }
 
   const taskHandlers: TaskHandler<SessionData>[] = [];
+  const skillCatalog = hooks.skills?.length ? loadSkillCatalog(hooks.skills) : undefined;
+  skillCatalog?.catch(() => {});
   const server = new McpRuntime<SessionData>({
     name: 'firecrawl-fastmcp',
     version: packageVersion,
@@ -857,6 +870,7 @@ export function createFirecrawlMcpServer(
         },
         taskHandlers
       ),
+      ...(skillCatalog ? [skillsExtension<SessionData>(skillCatalog, hooks.serveSkills)] : []),
     ],
     // Lightweight health endpoint for LB checks
     health: {
@@ -2856,11 +2870,12 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
           });
+          const error = feedbackRejectionError(parsed, response.status);
           return structuredText({
             success: false,
             status: response.status,
             feedbackErrorCode: parsed?.feedbackErrorCode,
-            error: feedbackRejectionError(parsed, response.status),
+            error: parsed?.feedbackErrorCode === 'SEARCH_NOT_FOUND' ? `${error} ${searchIdHint()}` : error,
             retryable: response.status >= 500,
           });
         }
@@ -2868,6 +2883,17 @@ Mark useful returned results in \`valuableResults\` as \`{"source", "position"}\
         return structuredText(parsed);
       },
     });
+  }
+
+  /**
+   * Added to a search feedback rejection for an ID that is no search of the
+   * account: agents send a scrape or map job's ID, or a placeholder.
+   */
+  function searchIdHint(): string {
+    const hint = '`searchId` is the top-level `id` of a `firecrawl_search` result.';
+    return alexandriaFeedbackAvailable()
+      ? `${hint} To rate a scrape, map or parse job, call \`firecrawl_feedback\` with that job's ID.`
+      : hint;
   }
 
   /**
@@ -3462,25 +3488,25 @@ Returns job status, progress information, and result data when completed.
         `/v2/agent/${encodeURIComponent(id)}`,
         originHeaders(requestOrigin(mcpClient, session))
       );
-      return agentStatusResult(res?.data ?? {});
+      return agentStatusResult(id, res?.data ?? {});
     },
   });
 
   /**
    * A run that hit its maxCredits ends `failed`, and the API may attach a
    * best-effort `partial`. Lead with a plain notice so the calling model does not
-   * mistake the partial for a finished answer or miss how to continue. Any other
-   * status passes through unchanged.
+   * mistake the partial for a finished answer or miss how to continue.
    */
-  function agentStatusResult(data: unknown): ContentResult {
-    const run = data as Record<string, unknown> | null;
-    if (
-      !run ||
-      typeof run !== 'object' ||
-      run.status !== 'failed' ||
-      run.stopReason !== 'credit_limit_reached'
-    ) {
+  function agentStatusResult(jobId: string, data: unknown): ContentResult {
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
       return structuredText(data);
+    }
+    // The API status body need not echo the ID. Keep the ID from the successful
+    // lookup, not the research thread ID or MCP task ID.
+    const run: Record<string, unknown> = { id: jobId, ...data };
+    run.id = jobId;
+    if (run.status !== 'failed' || run.stopReason !== 'credit_limit_reached') {
+      return structuredText(run);
     }
     const lines = [
       'This agent run stopped at its credit limit (maxCredits) before finishing.',
@@ -3510,7 +3536,7 @@ Returns job status, progress information, and result data when completed.
     );
     const notice = lines.join(' ');
     return withStructured(
-      `${notice}\n\n${JSON.stringify(data, null, 2)}`,
+      `${notice}\n\n${JSON.stringify(run, null, 2)}`,
       { ...run, notice }
     );
   }
@@ -3796,8 +3822,9 @@ Set \`redactPII\` to request redaction of personally identifiable information in
   });
 
   return {
-    start: (args) =>
-      server.start(
+    start: async (args) => {
+      await skillCatalog;
+      return server.start(
         (args.transportType === 'httpStream'
           ? {
               ...args,
@@ -3807,7 +3834,8 @@ Set \`redactPII\` to request redaction of personally identifiable information in
               },
             }
           : args) as Parameters<typeof server.start>[0]
-      ),
+      );
+    },
     stop: () => server.stop(),
   };
 }
