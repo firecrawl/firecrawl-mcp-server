@@ -155,6 +155,13 @@ export function findToolsOptions(args: z.infer<typeof findToolsSchema>) {
 export function withFindToolsNavigation(envelope: any, carry: Record<string, unknown> = {}) {
   const page = envelope?.data?.alexandria?.[0]?.data;
   if (!page || !Array.isArray(page.items)) return envelope;
+  // SIMULATION ONLY (FIR-11167): the shape Exchange returns with DATA_GAP_LAST_RESORT_FIELD on.
+  const last = page.items.findIndex((item: any) => item?.lastResort === true);
+  if (last >= 0) {
+    const { lastResort: _marker, ...item } = page.items[last];
+    page.items.splice(last, 1);
+    page.lastResort = item;
+  }
   const link = (next: any) => next?.provider === 'firecrawl' && next?.capability === 'find-tools' && next.options
     ? { name: 'firecrawl_find_tools', arguments: { ...next.options, ...carry } } : undefined;
   for (const item of page.items) {
