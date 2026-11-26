@@ -18,12 +18,12 @@ export class FeedbackTokenStore {
     this.#entries = this.#entries.filter((entry) => entry.at > cutoff);
   }
 
-  /** Stores a token and returns its ref; a token seen before keeps its ref. */
-  add(token: string): string {
+  /** Stores a token under the API's ref, or a minted one, and returns the ref; a token seen before keeps its ref. */
+  add(token: string, apiRef?: string): string {
     this.#prune();
     const known = this.#entries.find((entry) => entry.token === token);
     if (known) return known.ref;
-    const ref = `c${++this.#counter}`;
+    const ref = apiRef ?? `c${++this.#counter}`;
     this.#entries.push({ ref, token, at: this.now() });
     if (this.#entries.length > FEEDBACK_TOKEN_LIMIT) this.#entries.shift();
     return ref;
@@ -83,10 +83,16 @@ type Node = Record<string, unknown>;
 const isNode = (value: unknown): value is Node =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+/** Matches a ref the Firecrawl API issued, which it resolves itself without the token. */
+export const API_FEEDBACK_REF = /^a[A-Za-z0-9_-]{10}$/;
+
 function swapToken(node: unknown, store: FeedbackTokenStore): unknown {
-  if (!isNode(node) || typeof node.feedbackToken !== 'string') return node;
-  const { feedbackToken, ...rest } = node;
-  return rest.provider === 'firecrawl' ? rest : { ...rest, feedbackRef: store.add(feedbackToken) };
+  if (!isNode(node) || (typeof node.feedbackToken !== 'string' && typeof node.feedbackRef !== 'string')) return node;
+  const { feedbackToken, feedbackRef, ...rest } = node;
+  if (rest.provider === 'firecrawl') return rest;
+  const apiRef = typeof feedbackRef === 'string' && API_FEEDBACK_REF.test(feedbackRef) ? feedbackRef : undefined;
+  if (typeof feedbackToken !== 'string') return apiRef ? { ...rest, feedbackRef: apiRef } : rest;
+  return { ...rest, feedbackRef: store.add(feedbackToken, apiRef) };
 }
 
 /**
@@ -100,4 +106,34 @@ export function withFeedbackRefs<T>(body: T, store: FeedbackTokenStore): T {
   const data = swapToken(top.data, store) as Node;
   const results = Array.isArray(data.alexandria) ? data.alexandria.map((item) => swapToken(item, store)) : undefined;
   return { ...top, data: results ? { ...data, alexandria: results } : data } as T;
+}
+
+/**
+ * The session's call tokens and per-call ratings in the shape the feedback API takes. A ref this
+ * process does not hold is sent as is when the API issued it, since another process may have served
+ * the call; any other unknown ref is reported back.
+ */
+export function alexandriaFeedbackTokens(
+  callRatings: { ref: string; rating: 'good' | 'partial' | 'bad' }[] | undefined,
+  store: FeedbackTokenStore
+) {
+  const rated = new Map<string, 'good' | 'partial' | 'bad'>();
+  const byApiRef = new Map<string, 'good' | 'partial' | 'bad'>();
+  const unknownRefs: string[] = [];
+  for (const { ref, rating } of callRatings ?? []) {
+    const token = store.tokenForRef(ref);
+    if (token) rated.set(token, rating);
+    else if (API_FEEDBACK_REF.test(ref)) byApiRef.set(ref, rating);
+    else unknownRefs.push(ref);
+  }
+  const tokens = store.tokens();
+  return {
+    tokens,
+    callRatings: [
+      ...[...rated].map(([token, rating]) => ({ token, rating })),
+      ...[...byApiRef].map(([ref, rating]) => ({ ref, rating })),
+    ],
+    sent: [...new Set([...tokens, ...rated.keys()])],
+    unknownRefs,
+  };
 }

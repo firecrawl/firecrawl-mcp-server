@@ -2,7 +2,6 @@ import {
   ALEXANDRIA_FEEDBACK_HINT,
   alexandriaCallsWarrantFeedback,
   alexandriaFeedbackFields,
-  alexandriaFeedbackTokens,
   alexandriaSessionFeedbackSchema,
   withAlexandriaFeedbackHint,
 } from './alexandria-feedback.js';
@@ -82,7 +81,12 @@ import {
   type AlexandriaTools,
 } from './alexandria';
 import { alexandriaOutput } from './alexandria-output';
-import { FeedbackTokenRegistry, FeedbackTokenStore, withFeedbackRefs } from './alexandria-feedback-tokens.js';
+import {
+  alexandriaFeedbackTokens,
+  FeedbackTokenRegistry,
+  FeedbackTokenStore,
+  withFeedbackRefs,
+} from './alexandria-feedback-tokens.js';
 import { registerDeveloperTools } from './developer';
 import { registerGovTools } from './gov';
 import { registerEnrichTools } from './enrich';
@@ -3073,10 +3077,16 @@ Returns submission status, feedback ID, and accounting fields.
 
         if (attribution) {
           if (parsed?.success !== false) feedbackStore.remove(attribution.sent);
-          if (attribution.unknownRefs.length) {
+          const unknownRefs = [
+            ...attribution.unknownRefs,
+            ...(Array.isArray(parsed?.unknownRefs) ? parsed.unknownRefs : []),
+          ];
+          if (unknownRefs.length) {
+            const answer = { ...parsed };
+            delete answer.unknownRefs;
             return structuredText({
-              ...parsed,
-              note: `Ignored call ratings for unknown or expired refs: ${attribution.unknownRefs.join(', ')}.`,
+              ...answer,
+              note: `Ignored call ratings for unknown or expired refs: ${unknownRefs.join(', ')}.`,
             });
           }
         }

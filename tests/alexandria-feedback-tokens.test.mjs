@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  alexandriaFeedbackTokens,
   FEEDBACK_TOKEN_LIMIT,
   FEEDBACK_TOKEN_TTL_MS,
   FeedbackTokenRegistry,
@@ -82,4 +83,40 @@ test('withFeedbackRefs handles a flat single-call response', () => {
   const out = withFeedbackRefs({ success: true, provider: 'fred', capability: 'x', feedbackToken: 'tok-1' }, store);
   assert.equal(out.feedbackRef, 'c1');
   assert.equal(out.feedbackToken, undefined);
+});
+
+test('withFeedbackRefs shows the ref the API issued, so another process can resolve it', () => {
+  const store = new FeedbackTokenStore();
+  const out = withFeedbackRefs(
+    {
+      success: true,
+      data: {
+        alexandria: [
+          { provider: 'fred', capability: 'x', feedbackToken: 'tok-1', feedbackRef: 'aAbCdE12345' },
+          { provider: 'fred', capability: 'y', feedbackToken: 'tok-2', feedbackRef: 'not-an-api-ref' },
+        ],
+      },
+    },
+    store
+  );
+  assert.deepEqual(out.data.alexandria.map((item) => item.feedbackRef), ['aAbCdE12345', 'c1']);
+  assert.equal(store.tokenForRef('aAbCdE12345'), 'tok-1');
+});
+
+test('a rating by an API ref this process never saw is sent as a ref, not dropped', () => {
+  const held = new FeedbackTokenStore();
+  held.add('tok-1', 'aHeld567890');
+  const result = alexandriaFeedbackTokens(
+    [
+      { ref: 'aHeld567890', rating: 'good' },
+      { ref: 'aOther67890', rating: 'bad' },
+      { ref: 'c9', rating: 'partial' },
+    ],
+    held
+  );
+  assert.deepEqual(result.callRatings, [
+    { token: 'tok-1', rating: 'good' },
+    { ref: 'aOther67890', rating: 'bad' },
+  ]);
+  assert.deepEqual(result.unknownRefs, ['c9']);
 });
