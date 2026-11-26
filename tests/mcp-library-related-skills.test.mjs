@@ -119,9 +119,9 @@ test('alexandria_library_search is always loaded and opens with the data source 
   const { tools } = await client.request('tools/list', {});
   const library = tools.find((tool) => tool.name === 'alexandria_library_search');
   assert.equal(library._meta?.['anthropic/alwaysLoad'], true);
-  assert.match(library.description, /^Find the data source for the task first: [^.]*\. For a step-by-step workflow \([^)]*\) or to explore, check \/library\/skills: /);
+  assert.match(library.description, /^Find the data source for the task first: [^.]*\. For a specific workflow a skill may cover \([^)]*\), `cat \/library\/skills\/search\/<words>` /);
   assert.doesNotMatch(library.description, /Check \/library\/skills first/);
-  assert.match(init.instructions, /Find a task's data source through alexandria_library_search first; for a step-by-step workflow \([^)]*\) or to explore, check \/library\/skills there\. /);
+  assert.match(init.instructions, /Find a task's data source through alexandria_library_search first; when a specific step-by-step workflow \([^)]*\) may have a skill, search \/library\/skills there with two or three distinctive words\. /);
   assert.doesNotMatch(init.instructions, /Check \/library\/skills through alexandria_library_search first/);
   assert(!tools.some((tool) => tool.name === 'firecrawl_skills'));
 });
