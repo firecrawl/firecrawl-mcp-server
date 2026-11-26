@@ -4,11 +4,11 @@ export const FEEDBACK_TOKEN_LIMIT = 20;
 export const FEEDBACK_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_LIMIT = 1000;
 
-/** The longest ref any client's tool schema accepts; schemas cached before the signed-token ref allow 32. */
+/** The longest ref handed to a client. */
 export const MAX_FEEDBACK_REF_LENGTH = 32;
 /** Matches a short ref the Firecrawl API issued and resolves itself. */
 export const API_FEEDBACK_REF = /^a[A-Za-z0-9_-]{10}$/;
-/** Matches a ref this process issued for a token, and the refs issued before the signed-token ref. */
+/** Matches a local ref, resolved by the store that holds its token. */
 export const LOCAL_FEEDBACK_REF = /^c[A-Za-z0-9_-]{1,31}$/;
 
 /** A short ref for a call token, the same on every process, resolved by the store that holds the token. */

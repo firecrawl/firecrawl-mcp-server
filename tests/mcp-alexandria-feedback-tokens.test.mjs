@@ -15,7 +15,7 @@ const execute = (client) => client.request('tools/call', { name: 'alexandria_lib
 const feedback = (client, args = {}) => client.request('tools/call', { name: 'firecrawl_feedback', arguments: { ...FEEDBACK, ...args } });
 const feedbackBodies = (api) => api.requests.filter((request) => request.url === '/v2/feedback').map((request) => request.body);
 
-test('every ref handed out fits a 32-character cached schema, with or without the API ref', async (t) => {
+test('every ref handed out is at most 32 characters, with or without the API ref', async (t) => {
   assert.equal(MAX_FEEDBACK_REF_LENGTH, 32);
   for (const options of [{ feedbackTokens: true }, { feedbackTokens: true, feedbackRefs: true }, { feedbackRefs: true }]) {
     const { client } = await startStdioWithApi(t, options);
@@ -38,7 +38,7 @@ test('a local ref is sent as its token on the process that holds it', async (t) 
   assert.deepEqual(feedbackBodies(api)[0].callRatings, [{ token: callToken(1, 0), rating: 'bad' }]);
 });
 
-test('a local ref from another process, or from before signed refs, is reported back', async (t) => {
+test('a local ref this process does not hold is reported back', async (t) => {
   const { api, client } = await startStdioWithApi(t, { feedbackTokens: true });
   const result = toolText(
     await feedback(client, { callRatings: [{ ref: localFeedbackRef('elsewhere'), rating: 'bad' }, { ref: 'c1', rating: 'good' }] })
@@ -71,7 +71,7 @@ test('feedback sends the session tokens and clears them on success', async (t) =
   assert.equal(feedbackBodies(api)[1].tokens, undefined);
 });
 
-test('signed tokens handed out as refs before this change are still sent as tokens', async (t) => {
+test('a signed token given as a ref is sent as a token', async (t) => {
   const { api, client } = await startStdioWithApi(t, { feedbackTokens: true });
   await execute(client);
   const result = toolText(
