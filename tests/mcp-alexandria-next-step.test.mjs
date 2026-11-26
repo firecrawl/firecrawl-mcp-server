@@ -35,7 +35,7 @@ for (const [surface, name, args] of [
     assert.deepEqual(payload.data.alexandria[0].nextStep, nextStep);
     assert.deepEqual(result.structuredContent.data.alexandria[0].nextStep, nextStep);
     assert.equal(payload.data.alexandria[0].feedbackToken, undefined);
-    assert.match(payload.data.alexandria[0].feedbackRef, /^c\d+$/);
+    assert.equal(payload.data.alexandria[0].feedbackRef, 'v1.token.signature');
     assert.deepEqual(payload.data.alexandria[0].data, { price: 1 });
     // One pointer at feedback per result: the API's replaces this server's own.
     assert.equal(payload.feedbackTool, undefined);

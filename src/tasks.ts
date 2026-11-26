@@ -109,7 +109,7 @@ const TASK_ID = /^fc-(agent|crawl)-([0-9a-z]{1,12})-([A-Za-z0-9-]{1,100})$/;
 export interface TaskJobs<Session> {
   getClient(session: Session | undefined): FirecrawlApp;
   /** The tool result for a finished agent run, as `firecrawl_agent_status` returns it. */
-  agentResult(data: unknown): ContentResult;
+  agentResult(jobId: string, data: Record<string, unknown>): ContentResult;
   /** The tool result for a finished crawl, as `firecrawl_crawl` returns it. */
   crawlResult(
     client: FirecrawlApp,
@@ -306,7 +306,7 @@ async function readTask<Session extends OriginSession>(
   try {
     raw =
       kind === 'agent'
-        ? jobs.agentResult(body)
+        ? jobs.agentResult(jobId, body)
         : await jobs.crawlResult(client, jobId, origin, body);
   } catch (error) {
     const working = unreadable(error, kind, base);

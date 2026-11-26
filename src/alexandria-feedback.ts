@@ -59,7 +59,7 @@ export const alexandriaFeedbackFields = {
   callRatings: z
     .array(
       z.strictObject({
-        ref: z.string().trim().min(1).max(32),
+        ref: z.string().trim().min(1).max(1024),
         rating: z.enum(['good', 'partial', 'bad']),
       })
     )
@@ -136,24 +136,17 @@ export function withoutFeedbackNextStep<T>(body: T): T {
   };
 }
 
-/** The session's call tokens and per-call ratings in the shape the feedback API takes; unknown refs are reported back. */
+/** The session's call tokens and per-call ratings in the shape the feedback API takes; a ref is the call's token. */
 export function alexandriaFeedbackTokens(
   callRatings: { ref: string; rating: 'good' | 'partial' | 'bad' }[] | undefined,
   store: FeedbackTokenStore
 ) {
-  const rated = new Map<string, 'good' | 'partial' | 'bad'>();
-  const unknownRefs: string[] = [];
-  for (const { ref, rating } of callRatings ?? []) {
-    const token = store.tokenForRef(ref);
-    if (token) rated.set(token, rating);
-    else unknownRefs.push(ref);
-  }
+  const rated = new Map((callRatings ?? []).map(({ ref, rating }) => [ref, rating]));
   const tokens = store.tokens();
   return {
     tokens,
     callRatings: [...rated].map(([token, rating]) => ({ token, rating })),
     sent: [...new Set([...tokens, ...rated.keys()])],
-    unknownRefs,
   };
 }
 

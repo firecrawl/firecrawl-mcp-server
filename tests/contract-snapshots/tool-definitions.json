@@ -243,7 +243,7 @@
       "anthropic/alwaysLoad": true
     }
   },
-  "alexandria_library_search@9b357b3159f5": {
+  "alexandria_library_search@46110843859c": {
     "annotations": {
       "title": "Alexandria library search",
       "readOnlyHint": true,
@@ -252,7 +252,7 @@
       "idempotentHint": true
     },
     "title": "Alexandria library search",
-    "description": "Check /library/skills first for any business workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring): it holds your team's and Firecrawl's step-by-step instructions for these tasks; follow a matching one instead of improvising. `cat /library/skills/search/<a-few-words-from-the-task>` (joined by hyphens) ranks them, your team's first; cat the path to read one. Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more) as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: agriculture, ai-models, apps, automotive, community, companies, developer, digital-intelligence, education, energy, entertainment, finance, game-development, government, health, healthcare, jobs, knowledge, life-sciences, marketing, music, news, people, places, podcasts, political-science, real-estate, research, restaurants, shopping, social, software, sports, travel; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril \"mortgage\" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider \"fred\", capability \"series/observations\". Recorded example responses are under /examples/<provider>/<capability>.json. Free; does not run providers.",
+    "description": "Find the data source for the task first: `grep -ril \"<word>\" /library` lists the capabilities that cover it. For a step-by-step workflow (sales or meeting prep, prospect lists, competitor, market or financial research, monitoring) or to explore, check /library/skills: `cat /library/skills/search/<a-few-words-from-the-task>` (joined by hyphens) ranks the skills, your team's first; cat the path to read one. Explore the Alexandria library: Firecrawl's catalogue of data providers that return typed, sourced records (companies, people, jobs, finance and filings, public records and government spending, real estate, places and restaurants, retail and prices, package registries and developer data, news, research, and more) as a read-only filesystem, using shell commands. Use this to find out whether a provider covers the data a task needs, and to read its contract before alexandria_library_read. Layout: /library/<category>/<provider>/<capability>.md, one file per capability holding its contract (when to use it, inputs, outputs, and the call to send); /library, each category folder and each provider folder has a README.md describing what is inside. Category folders: agriculture, ai-models, apps, automotive, community, companies, developer, digital-intelligence, education, energy, entertainment, finance, game-development, government, health, healthcare, jobs, knowledge, life-sciences, marketing, music, news, people, places, podcasts, political-science, real-estate, research, restaurants, shopping, social, software, sports, travel; `ls /library` shows any added since. Available commands: ls, tree, cat, head, tail, grep, find, wc, sort, uniq, cut, tr, sed, jq, xargs, with pipes. Typical starts: `ls /library`, `cat /library/README.md`, or `grep -ril \"mortgage\" /library`. A file path is the execute address: /library/finance/fred/series/observations.md is provider \"fred\", capability \"series/observations\". Recorded example responses are under /examples/<provider>/<capability>.json. Free; does not run providers.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -2022,7 +2022,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_feedback@36e2b3d07874": {
+  "firecrawl_feedback@dde2ef9ab588": {
     "annotations": {
       "title": "Firecrawl feedback",
       "readOnlyHint": false,
@@ -2170,7 +2170,7 @@
               "ref": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 32
+                "maxLength": 1024
               },
               "rating": {
                 "type": "string",
@@ -5002,7 +5002,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_research_inspect_paper@ee63ff8d6e52": {
+  "firecrawl_research_inspect_paper@411cfef56572": {
     "annotations": {
       "title": "Firecrawl inspect research paper",
       "readOnlyHint": true,
@@ -5074,6 +5074,17 @@
             },
             "abstract": {
               "description": "Paper abstract.",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "passage": {
+              "description": "Body passage that best matches the query, present only for papers with licensed full text.",
               "anyOf": [
                 {
                   "type": "string"
@@ -5813,7 +5824,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_research_related_papers@f3564b29cad4": {
+  "firecrawl_research_related_papers@0dea59a6c585": {
     "annotations": {
       "title": "Firecrawl related research papers",
       "readOnlyHint": true,
@@ -5921,6 +5932,17 @@
                   }
                 ]
               },
+              "passage": {
+                "description": "Body passage that best matches the query, present only for papers with licensed full text.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "authors": {
                 "description": "Authors, as a list of names or a comma-joined string."
               },
@@ -5987,7 +6009,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_research_search_papers@b87270f75611": {
+  "firecrawl_research_search_papers@4778e1d0ea9b": {
     "annotations": {
       "title": "Firecrawl research paper search",
       "readOnlyHint": true,
@@ -5995,7 +6017,7 @@
       "destructiveHint": false
     },
     "title": "Firecrawl research paper search",
-    "description": "Search paper metadata and abstracts with a natural-language query across the indexed corpus, which spans biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources. Optional author, category, date, and sort options constrain or reorder results.\n\nSeveral distinct framings of the same question surface different papers than a single query does.\n\nReturns ranked papers with canonical IDs, titles, authors, and abstracts.",
+    "description": "Search paper metadata and abstracts with a natural-language query across the indexed corpus, which spans biomedical, life-science, and clinical literature (PubMed, bioRxiv, medRxiv) alongside arXiv and other scientific sources. Optional author, category, date, and sort options constrain or reorder results.\n\nSeveral distinct framings of the same question surface different papers than a single query does.\n\nReturns ranked papers with canonical IDs, titles, authors, and abstracts. Papers with licensed full text also carry the body passage that best matches the query.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -6097,6 +6119,17 @@
               },
               "abstract": {
                 "description": "Paper abstract.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "passage": {
+                "description": "Body passage that best matches the query, present only for papers with licensed full text.",
                 "anyOf": [
                   {
                     "type": "string"
@@ -10282,7 +10315,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_enrich@d72635ff6928": {
+  "people_company_enrich@9b9d5afca74c": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": true,
@@ -10290,7 +10323,7 @@
       "destructiveHint": false
     },
     "title": "Look up and enrich people or companies",
-    "description": "Use this first when the user names a person (a name with a company or domain, a LinkedIn URL or an email) or a company and wants contact details, a profile or firmographics, such as the email of a founder at a given company. One call runs the provider waterfall. Use it, not people_company_search, whenever you have a name with a company or domain, a LinkedIn URL or an email. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price, and stops as soon as the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. Ask for mobile only when the task needs a phone number; it is the costliest field and nothing is spent on it otherwise. A work email is on the company domain when one is known and never on a known free-mail domain or a known role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. To call one specific provider, use firecrawl_scrape with an alexandria body instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
+    "description": "Use this first when the user names a person (a name with a company or domain, a LinkedIn URL or an email) or a company and wants contact details, a profile or firmographics, such as the email of a founder at a given company. Use it, not people_company_search, whenever you have one of those identifiers. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall: Firecrawl tries the providers that can use your inputs one at a time, by listed price, and stops when the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile too. Ask for mobile only when a phone number is needed: it is the costliest field. A work email is never on a known free-mail domain or role mailbox, and is on the company domain when one is found there; otherwise an address at another employer may be returned with domain_match false and warning \"employer_mismatch\" in fields.work_email: treat it as unconfirmed. fields says for each answer which provider gave it, whether the email was verified and its domain matched. verified_only returns only verified emails. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it there is no cap. To call one specific provider, use firecrawl_scrape with an alexandria body instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",
@@ -10692,7 +10725,7 @@
       "additionalProperties": false
     }
   },
-  "people_company_enrich@dc2d9db0d055": {
+  "people_company_enrich@f6764587c933": {
     "annotations": {
       "title": "Look up and enrich people or companies",
       "readOnlyHint": true,
@@ -10700,7 +10733,7 @@
       "destructiveHint": false
     },
     "title": "Look up and enrich people or companies",
-    "description": "Use this first when the user names a person (a name with a company or domain, a LinkedIn URL or an email) or a company and wants contact details, a profile or firmographics, such as the email of a founder at a given company. One call runs the provider waterfall. Use it, not people_company_search, whenever you have a name with a company or domain, a LinkedIn URL or an email. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price, and stops as soon as the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. Ask for mobile only when the task needs a phone number; it is the costliest field and nothing is spent on it otherwise. A work email is on the company domain when one is known and never on a known free-mail domain or a known role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. To call one specific provider, use alexandria_library_read instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
+    "description": "Use this first when the user names a person (a name with a company or domain, a LinkedIn URL or an email) or a company and wants contact details, a profile or firmographics, such as the email of a founder at a given company. Use it, not people_company_search, whenever you have one of those identifiers. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to 10 records per call. Each requested field runs a waterfall: Firecrawl tries the providers that can use your inputs one at a time, by listed price, and stops when the field is found. Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile too. Ask for mobile only when a phone number is needed: it is the costliest field. A work email is never on a known free-mail domain or role mailbox, and is on the company domain when one is found there; otherwise an address at another employer may be returned with domain_match false and warning \"employer_mismatch\" in fields.work_email: treat it as unconfirmed. fields says for each answer which provider gave it, whether the email was verified and its domain matched. verified_only returns only verified emails. Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it there is no cap. To call one specific provider, use alexandria_library_read instead. Example: {\"contact_fields\":[\"work_email\"],\"people\":[{\"name\":\"Jane Doe\",\"domain\":\"example.com\"}]}.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "type": "object",

@@ -4,12 +4,11 @@ export const FEEDBACK_TOKEN_LIMIT = 20;
 export const FEEDBACK_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_LIMIT = 1000;
 
-type Entry = { ref: string; token: string; at: number };
+type Entry = { token: string; at: number };
 
-/** Feedback tokens of one client session, addressed by the short refs shown to the agent. */
+/** Feedback tokens of one client session, sent with its overall Alexandria rating. */
 export class FeedbackTokenStore {
   #entries: Entry[] = [];
-  #counter = 0;
 
   constructor(private readonly now: () => number = Date.now) {}
 
@@ -18,26 +17,18 @@ export class FeedbackTokenStore {
     this.#entries = this.#entries.filter((entry) => entry.at > cutoff);
   }
 
-  /** Stores a token and returns its ref; a token seen before keeps its ref. */
-  add(token: string): string {
+  /** Stores a token once; a token seen before is not added again. */
+  add(token: string): void {
     this.#prune();
-    const known = this.#entries.find((entry) => entry.token === token);
-    if (known) return known.ref;
-    const ref = `c${++this.#counter}`;
-    this.#entries.push({ ref, token, at: this.now() });
+    if (this.#entries.some((entry) => entry.token === token)) return;
+    this.#entries.push({ token, at: this.now() });
     if (this.#entries.length > FEEDBACK_TOKEN_LIMIT) this.#entries.shift();
-    return ref;
   }
 
   /** Tokens still valid, oldest first. */
   tokens(): string[] {
     this.#prune();
     return this.#entries.map((entry) => entry.token);
-  }
-
-  tokenForRef(ref: string): string | undefined {
-    this.#prune();
-    return this.#entries.find((entry) => entry.ref === ref)?.token;
   }
 
   remove(tokens: Iterable<string>): void {
@@ -86,13 +77,15 @@ const isNode = (value: unknown): value is Node =>
 function swapToken(node: unknown, store: FeedbackTokenStore): unknown {
   if (!isNode(node) || typeof node.feedbackToken !== 'string') return node;
   const { feedbackToken, ...rest } = node;
-  return rest.provider === 'firecrawl' ? rest : { ...rest, feedbackRef: store.add(feedbackToken) };
+  if (rest.provider === 'firecrawl') return rest;
+  store.add(feedbackToken);
+  return { ...rest, feedbackRef: feedbackToken };
 }
 
 /**
- * Replaces each call result's `feedbackToken` with a short `feedbackRef` kept in
- * the store, so long opaque tokens stay out of the model's context. Tokens on
- * Firecrawl-internal calls (discovery, bash, terms) are dropped.
+ * Shows each call result's `feedbackToken` as `feedbackRef` and keeps it in the
+ * session store. The ref is the signed token itself, so a rating resolves on any
+ * instance and under any credential. Tokens on Firecrawl-internal calls are dropped.
  */
 export function withFeedbackRefs<T>(body: T, store: FeedbackTokenStore): T {
   const top = swapToken(body, store);
