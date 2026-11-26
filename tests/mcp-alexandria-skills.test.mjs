@@ -15,7 +15,7 @@ test('skills are read through alexandria_library_search; firecrawl_save_skill wr
   for (const name of ['firecrawl_skills', 'firecrawl_find_skills', 'firecrawl_read_skill', 'firecrawl_create_skill', 'firecrawl_update_skill']) assert(!tools.some(tool => tool.name === name), name);
   assert.deepEqual(tools.find(tool => tool.name === 'firecrawl_save_skill')?.annotations, { title: 'Save Skill', readOnlyHint: false, openWorldHint: false, destructiveHint: true, idempotentHint: false });
   const library = tools.find(tool => tool.name === 'alexandria_library_search');
-  assert.match(library.description, /^Find the data source for the task first: `grep -ril "<word>" \/library` lists the capabilities that cover it\. For a specific workflow a skill may cover \([^)]*\), `cat \/library\/skills\/search\/<words>` with two or three distinctive words, e\.g\. search\/investor-list, not generic ones like research\. /);
+  assert.match(library.description, /^Find the data source for the task first: `grep -ril "<word>" \/library` lists the capabilities that cover it\. For a specific workflow a skill may cover \([^)]*\), `cat \/library\/skills\/search\/<words>` with two or three distinctive words, e\.g\. investor-list, not generic ones like research\. /);
   assert.match(library.description, /Keyword matching lists any skill sharing a word: cat one only if it fits, else none covers the task\./);
   assert.doesNotMatch(library.description, /to explore|a-few-words/);
 });
