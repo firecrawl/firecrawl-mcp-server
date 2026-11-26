@@ -91,11 +91,18 @@ test('withFeedbackRefs shows the short ref the API issued and keeps the token', 
         alexandria: [
           { provider: 'fred', capability: 'x', feedbackToken: 'tok-1', feedbackRef: 'aAbCdE12345' },
           { provider: 'fred', capability: 'y', feedbackToken: 'tok-2', feedbackRef: 'not-an-api-ref' },
+          { provider: 'fred', capability: 'z', feedbackToken: 'tok-3', feedbackRef: 'aAbCdE1234' },
+          { provider: 'fred', capability: 'w', feedbackToken: 'tok-4', feedbackRef: 'aAbCdE1234!' },
         ],
       },
     },
     store
   );
-  assert.deepEqual(out.data.alexandria.map((item) => item.feedbackRef), ['aAbCdE12345', localFeedbackRef('tok-2')]);
-  assert.deepEqual(store.tokens(), ['tok-1', 'tok-2']);
+  assert.deepEqual(out.data.alexandria.map((item) => item.feedbackRef), [
+    'aAbCdE12345',
+    localFeedbackRef('tok-2'),
+    localFeedbackRef('tok-3'),
+    localFeedbackRef('tok-4'),
+  ]);
+  assert.deepEqual(store.tokens(), ['tok-1', 'tok-2', 'tok-3', 'tok-4']);
 });
