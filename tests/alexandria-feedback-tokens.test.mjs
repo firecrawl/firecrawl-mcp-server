@@ -120,3 +120,12 @@ test('a rating by an API ref this process never saw is sent as a ref, not droppe
   ]);
   assert.deepEqual(result.unknownRefs, ['c9']);
 });
+
+test('a token first stored under a local ref takes the API ref when it arrives, keeping both resolvable', () => {
+  const store = new FeedbackTokenStore();
+  assert.equal(store.add('tok-1'), 'c1');
+  assert.equal(store.add('tok-1', 'aLater67890'), 'aLater67890');
+  assert.equal(store.tokenForRef('c1'), 'tok-1');
+  assert.equal(store.tokenForRef('aLater67890'), 'tok-1');
+  assert.deepEqual(store.tokens(), ['tok-1']);
+});

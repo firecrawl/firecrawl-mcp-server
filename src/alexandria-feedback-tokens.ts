@@ -4,7 +4,7 @@ export const FEEDBACK_TOKEN_LIMIT = 20;
 export const FEEDBACK_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_LIMIT = 1000;
 
-type Entry = { ref: string; token: string; at: number };
+type Entry = { ref: string; token: string; at: number; apiRef?: string };
 
 /** Feedback tokens of one client session, addressed by the short refs shown to the agent. */
 export class FeedbackTokenStore {
@@ -22,7 +22,10 @@ export class FeedbackTokenStore {
   add(token: string, apiRef?: string): string {
     this.#prune();
     const known = this.#entries.find((entry) => entry.token === token);
-    if (known) return known.ref;
+    if (known) {
+      known.apiRef ??= apiRef;
+      return known.apiRef ?? known.ref;
+    }
     const ref = apiRef ?? `c${++this.#counter}`;
     this.#entries.push({ ref, token, at: this.now() });
     if (this.#entries.length > FEEDBACK_TOKEN_LIMIT) this.#entries.shift();
@@ -37,7 +40,7 @@ export class FeedbackTokenStore {
 
   tokenForRef(ref: string): string | undefined {
     this.#prune();
-    return this.#entries.find((entry) => entry.ref === ref)?.token;
+    return this.#entries.find((entry) => entry.ref === ref || entry.apiRef === ref)?.token;
   }
 
   remove(tokens: Iterable<string>): void {
