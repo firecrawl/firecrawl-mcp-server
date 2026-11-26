@@ -5,6 +5,7 @@ import {
   FEEDBACK_TOKEN_TTL_MS,
   FeedbackTokenRegistry,
   FeedbackTokenStore,
+  localFeedbackRef,
   withFeedbackRefs,
 } from '../dist/alexandria-feedback-tokens.js';
 
@@ -68,7 +69,7 @@ test('withFeedbackRefs shows provider tokens as refs and drops internal ones', (
   const out = withFeedbackRefs(body, store);
   assert.deepEqual(
     out.data.alexandria.map((item) => [item.feedbackRef, item.feedbackToken]),
-    [['tok-1', undefined], ['tok-2', undefined], [undefined, undefined], [undefined, undefined]]
+    [[localFeedbackRef('tok-1'), undefined], [localFeedbackRef('tok-2'), undefined], [undefined, undefined], [undefined, undefined]]
   );
   assert.deepEqual(store.tokens(), ['tok-1', 'tok-2']);
   assert.equal(body.data.alexandria[0].feedbackToken, 'tok-1');
@@ -77,7 +78,7 @@ test('withFeedbackRefs shows provider tokens as refs and drops internal ones', (
 test('withFeedbackRefs handles a flat single-call response', () => {
   const store = new FeedbackTokenStore();
   const out = withFeedbackRefs({ success: true, provider: 'fred', capability: 'x', feedbackToken: 'tok-1' }, store);
-  assert.equal(out.feedbackRef, 'tok-1');
+  assert.equal(out.feedbackRef, localFeedbackRef('tok-1'));
   assert.equal(out.feedbackToken, undefined);
 });
 
@@ -95,6 +96,6 @@ test('withFeedbackRefs shows the short ref the API issued and keeps the token', 
     },
     store
   );
-  assert.deepEqual(out.data.alexandria.map((item) => item.feedbackRef), ['aAbCdE12345', 'tok-2']);
+  assert.deepEqual(out.data.alexandria.map((item) => item.feedbackRef), ['aAbCdE12345', localFeedbackRef('tok-2')]);
   assert.deepEqual(store.tokens(), ['tok-1', 'tok-2']);
 });
