@@ -16,7 +16,7 @@ test('skills are read through alexandria_library_search; firecrawl_save_skill wr
   assert.deepEqual(tools.find(tool => tool.name === 'firecrawl_save_skill')?.annotations, { title: 'Save Skill', readOnlyHint: false, openWorldHint: false, destructiveHint: true, idempotentHint: false });
   const library = tools.find(tool => tool.name === 'alexandria_library_search');
   assert.match(library.description, /^Find the data source for the task first: `grep -ril "<word>" \/library` lists the capabilities that cover it\. For a specific workflow a skill may cover \([^)]*\), `cat \/library\/skills\/search\/<words>` with two or three distinctive words, e\.g\. search\/investor-list, not generic ones like research\. /);
-  assert.match(library.description, /Keyword matching lists any skill sharing a word: cat one only if its name fits, else none covers the task\./);
+  assert.match(library.description, /Keyword matching lists any skill sharing a word: cat one only if it fits, else none covers the task\./);
   assert.doesNotMatch(library.description, /to explore|a-few-words/);
 });
 
