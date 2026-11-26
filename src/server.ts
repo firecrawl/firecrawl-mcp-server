@@ -3075,7 +3075,9 @@ Returns submission status, feedback ID, and accounting fields.
         if (attribution?.unknownRefs.length) {
           return structuredText({
             ...parsed,
-            note: `Ignored call ratings for unknown or expired refs: ${attribution.unknownRefs.join(', ')}.`,
+            note: [parsed?.note, `Ignored call ratings for unknown or expired refs: ${attribution.unknownRefs.join(', ')}.`]
+              .filter(Boolean)
+              .join(' '),
           });
         }
         return structuredText(parsed);
