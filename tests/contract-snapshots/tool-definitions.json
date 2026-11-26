@@ -2022,7 +2022,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_feedback@fa308d351208": {
+  "firecrawl_feedback@63de5749496b": {
     "annotations": {
       "title": "Firecrawl feedback",
       "readOnlyHint": false,
@@ -2170,7 +2170,7 @@
               "ref": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 32
+                "maxLength": 1024
               },
               "rating": {
                 "type": "string",

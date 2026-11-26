@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { FeedbackTokenStore } from './alexandria-feedback-tokens.js';
+import { API_FEEDBACK_REF, LOCAL_FEEDBACK_REF, type FeedbackTokenStore } from './alexandria-feedback-tokens.js';
 
 const detail = z.string().trim().min(1).max(2000);
 const name = z.string().trim().min(1).max(200);
@@ -59,7 +59,7 @@ export const alexandriaFeedbackFields = {
   callRatings: z
     .array(
       z.strictObject({
-        ref: z.string().trim().min(1).max(32),
+        ref: z.string().trim().min(1).max(1024),
         rating: z.enum(['good', 'partial', 'bad']),
       })
     )
@@ -105,23 +105,35 @@ export function withAlexandriaFeedbackHint<T>(
   return { ...envelope, feedbackTool: ALEXANDRIA_FEEDBACK_HINT };
 }
 
-/** The session's call tokens and per-call ratings in the shape the feedback API takes; unknown refs are reported back. */
+/**
+ * The session's call tokens and per-call ratings in the shape the feedback API takes. An API
+ * ref is sent as a ref; a local ref is sent as the token this process holds for it, or reported
+ * back when it holds none; any other ref is a signed call token and is sent as one.
+ */
 export function alexandriaFeedbackTokens(
   callRatings: { ref: string; rating: 'good' | 'partial' | 'bad' }[] | undefined,
   store: FeedbackTokenStore
 ) {
-  const rated = new Map<string, 'good' | 'partial' | 'bad'>();
+  const byToken = new Map<string, 'good' | 'partial' | 'bad'>();
+  const byRef = new Map<string, 'good' | 'partial' | 'bad'>();
   const unknownRefs: string[] = [];
   for (const { ref, rating } of callRatings ?? []) {
-    const token = store.tokenForRef(ref);
-    if (token) rated.set(token, rating);
+    if (API_FEEDBACK_REF.test(ref)) {
+      byRef.set(ref, rating);
+      continue;
+    }
+    const token = LOCAL_FEEDBACK_REF.test(ref) ? store.tokenForRef(ref) : ref;
+    if (token) byToken.set(token, rating);
     else unknownRefs.push(ref);
   }
   const tokens = store.tokens();
   return {
     tokens,
-    callRatings: [...rated].map(([token, rating]) => ({ token, rating })),
-    sent: [...new Set([...tokens, ...rated.keys()])],
+    callRatings: [
+      ...[...byToken].map(([token, rating]) => ({ token, rating })),
+      ...[...byRef].map(([ref, rating]) => ({ ref, rating })),
+    ],
+    sent: [...new Set([...tokens, ...byToken.keys()])],
     unknownRefs,
   };
 }

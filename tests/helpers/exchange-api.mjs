@@ -41,6 +41,7 @@ const TERMS_REQUIRED_BODY = {
 };
 
 const callToken = (call, index) => `fbk.${'x'.repeat(300)}.${call}.${index}`;
+const apiRef = (call, index) => `a${`ref${call}_${index}`.padEnd(10, '0')}`;
 
 async function startFakeExchangeApi(options = {}) {
   const requests = [];
@@ -162,6 +163,7 @@ async function startFakeExchangeApi(options = {}) {
                 capability: 'series/observations',
                 creditsCost: 1,
                 ...(options.feedbackTokens ? { feedbackToken: callToken(call, 0) } : {}),
+                ...(options.feedbackRefs ? { feedbackRef: apiRef(call, 0) } : {}),
                 data: {
                   observations: [{ date: '2026-01-01', value: '320.1' }],
                 },
@@ -172,6 +174,7 @@ async function startFakeExchangeApi(options = {}) {
                 provider: 'fred',
                 capability: 'series/missing',
                 ...(options.feedbackTokens ? { feedbackToken: callToken(call, 1) } : {}),
+                ...(options.feedbackRefs ? { feedbackRef: apiRef(call, 1) } : {}),
                 error: {
                   code: 'capability_not_found',
                   message: 'Unknown capability',
@@ -255,4 +258,4 @@ async function startFakeExchangeApi(options = {}) {
 }
 
 
-export { callToken, CAPABILITY_HIT, EXCHANGE_CALL, TERMS_REQUIRED_BODY, startFakeExchangeApi };
+export { apiRef, callToken, CAPABILITY_HIT, EXCHANGE_CALL, TERMS_REQUIRED_BODY, startFakeExchangeApi };
