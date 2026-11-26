@@ -200,6 +200,7 @@ function withoutPagePrices(page: any) {
   return {
     ...page,
     ...(Array.isArray(page.items) ? { items: page.items.map(withoutToolPrice) } : {}),
+    ...(page.lastResort && typeof page.lastResort === 'object' ? { lastResort: withoutToolPrice(page.lastResort) } : {}),
     ...(Array.isArray(page.relatedTools) ? {
       relatedTools: page.relatedTools.map((group: any) => Array.isArray(group?.tools)
         ? { ...group, tools: group.tools.map((entry: any) => entry?.tool ? { ...entry, tool: withoutToolPrice(entry.tool) } : withoutToolPrice(entry)) }

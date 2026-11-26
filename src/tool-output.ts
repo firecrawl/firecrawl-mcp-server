@@ -191,7 +191,7 @@ export const searchOutputSchema = z
 export const findToolsOutputSchema = z
   .object({
     success,
-    data: unknown('Discovery page in `data.alexandria[0].data`, with `level`, `items`, `total`, and an optional `nextTool`.'),
+    data: unknown('Discovery page in `data.alexandria[0].data`, with `level`, `items`, `total`, and an optional `nextTool`. An optional `lastResort` is the tool to report data you could not find, offered when no item fits.'),
     error,
     ...alexandriaEnvelope,
   })

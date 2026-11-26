@@ -2484,7 +2484,7 @@
       "additionalProperties": false
     }
   },
-  "firecrawl_find_tools@d138e7a0897b": {
+  "firecrawl_find_tools@a31085cdadfa": {
     "annotations": {
       "title": "Find Tools",
       "readOnlyHint": true,
@@ -2609,7 +2609,7 @@
           ]
         },
         "data": {
-          "description": "Discovery page in `data.alexandria[0].data`, with `level`, `items`, `total`, and an optional `nextTool`."
+          "description": "Discovery page in `data.alexandria[0].data`, with `level`, `items`, `total`, and an optional `nextTool`. An optional `lastResort` is the tool to report data you could not find, offered when no item fits."
         },
         "error": {
           "description": "Error message or error object when the call did not succeed."

@@ -71,6 +71,17 @@ test('discovery output never carries per-capability prices', async (t) => {
   assert.doesNotMatch(JSON.stringify(categories), /creditsCost/);
 });
 
+test('discovery passes lastResort beside items, without prices', async (t) => {
+  const { client } = await startStdioWithApi(t, LEGACY);
+  const call = arguments_ => client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });
+  const page = toolText(await call({ query: 'could not find ferry timetables' })).data.alexandria[0].data;
+  assert.deepEqual(page.items.map(item => item.id), ['fred/series/observations']);
+  assert.equal(page.lastResort.id, 'firecrawl/report-missing-data');
+  for (const key of ['creditsCost', 'perRecord', 'billing', 'recordsPerUnit', 'zeroDataRetentionCreditsCost']) assert.equal(key in page.lastResort, false, key);
+  const plain = toolText(await call({ query: 'stock quotes' })).data.alexandria[0].data;
+  assert.equal('lastResort' in plain, false);
+});
+
 test('includeCosts returns per-capability prices and carries through navigation', async (t) => {
   const { api, client } = await startStdioWithApi(t, LEGACY);
   const call = arguments_ => client.request('tools/call', { name: 'firecrawl_find_tools', arguments: arguments_ });
