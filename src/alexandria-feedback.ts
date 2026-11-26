@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { FeedbackTokenStore } from './alexandria-feedback-tokens.js';
+import { API_FEEDBACK_REF, LOCAL_FEEDBACK_REF, type FeedbackTokenStore } from './alexandria-feedback-tokens.js';
 
 const detail = z.string().trim().min(1).max(2000);
 const name = z.string().trim().min(1).max(200);
@@ -105,17 +105,36 @@ export function withAlexandriaFeedbackHint<T>(
   return { ...envelope, feedbackTool: ALEXANDRIA_FEEDBACK_HINT };
 }
 
-/** The session's call tokens and per-call ratings in the shape the feedback API takes; a ref is the call's token. */
+/**
+ * The session's call tokens and per-call ratings in the shape the feedback API takes. An API
+ * ref is sent as a ref; a local ref is sent as the token this process holds for it, or reported
+ * back when it holds none; any other ref is a signed call token and is sent as one.
+ */
 export function alexandriaFeedbackTokens(
   callRatings: { ref: string; rating: 'good' | 'partial' | 'bad' }[] | undefined,
   store: FeedbackTokenStore
 ) {
-  const rated = new Map((callRatings ?? []).map(({ ref, rating }) => [ref, rating]));
+  const byToken = new Map<string, 'good' | 'partial' | 'bad'>();
+  const byRef = new Map<string, 'good' | 'partial' | 'bad'>();
+  const unknownRefs: string[] = [];
+  for (const { ref, rating } of callRatings ?? []) {
+    if (API_FEEDBACK_REF.test(ref)) {
+      byRef.set(ref, rating);
+      continue;
+    }
+    const token = LOCAL_FEEDBACK_REF.test(ref) ? store.tokenForRef(ref) : ref;
+    if (token) byToken.set(token, rating);
+    else unknownRefs.push(ref);
+  }
   const tokens = store.tokens();
   return {
     tokens,
-    callRatings: [...rated].map(([token, rating]) => ({ token, rating })),
-    sent: [...new Set([...tokens, ...rated.keys()])],
+    callRatings: [
+      ...[...byToken].map(([token, rating]) => ({ token, rating })),
+      ...[...byRef].map(([ref, rating]) => ({ ref, rating })),
+    ],
+    sent: [...new Set([...tokens, ...byToken.keys()])],
+    unknownRefs,
   };
 }
 

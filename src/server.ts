@@ -3072,6 +3072,14 @@ Returns submission status, feedback ID, and accounting fields.
         }
 
         if (attribution && parsed?.success !== false) feedbackStore.remove(attribution.sent);
+        if (attribution?.unknownRefs.length) {
+          return structuredText({
+            ...parsed,
+            note: [parsed?.note, `Ignored call ratings for unknown or expired refs: ${attribution.unknownRefs.join(', ')}.`]
+              .filter(Boolean)
+              .join(' '),
+          });
+        }
         return structuredText(parsed);
       },
     });

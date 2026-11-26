@@ -4,6 +4,17 @@ export const FEEDBACK_TOKEN_LIMIT = 20;
 export const FEEDBACK_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_LIMIT = 1000;
 
+/** The longest ref handed to a client. */
+export const MAX_FEEDBACK_REF_LENGTH = 32;
+/** Matches a short ref the Firecrawl API issued and resolves itself. */
+export const API_FEEDBACK_REF = /^a[A-Za-z0-9_-]{10}$/;
+/** Matches a local ref, resolved by the store that holds its token. */
+export const LOCAL_FEEDBACK_REF = /^c[A-Za-z0-9_-]{1,31}$/;
+
+/** A short ref for a call token, the same on every process, resolved by the store that holds the token. */
+export const localFeedbackRef = (token: string): string =>
+  `c${createHash('sha256').update(token).digest('base64url').slice(0, 16)}`;
+
 type Entry = { token: string; at: number };
 
 /** Feedback tokens of one client session, sent with its overall Alexandria rating. */
@@ -23,6 +34,12 @@ export class FeedbackTokenStore {
     if (this.#entries.some((entry) => entry.token === token)) return;
     this.#entries.push({ token, at: this.now() });
     if (this.#entries.length > FEEDBACK_TOKEN_LIMIT) this.#entries.shift();
+  }
+
+  /** The token a local ref names, when this store holds it. */
+  tokenForRef(ref: string): string | undefined {
+    this.#prune();
+    return this.#entries.find((entry) => localFeedbackRef(entry.token) === ref)?.token;
   }
 
   /** Tokens still valid, oldest first. */
@@ -75,17 +92,20 @@ const isNode = (value: unknown): value is Node =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 function swapToken(node: unknown, store: FeedbackTokenStore): unknown {
-  if (!isNode(node) || typeof node.feedbackToken !== 'string') return node;
-  const { feedbackToken, ...rest } = node;
+  if (!isNode(node)) return node;
+  const { feedbackToken, feedbackRef, ...rest } = node;
+  if (typeof feedbackToken !== 'string' && typeof feedbackRef !== 'string') return node;
   if (rest.provider === 'firecrawl') return rest;
-  store.add(feedbackToken);
-  return { ...rest, feedbackRef: feedbackToken };
+  if (typeof feedbackToken === 'string') store.add(feedbackToken);
+  const apiRef = typeof feedbackRef === 'string' && API_FEEDBACK_REF.test(feedbackRef) ? feedbackRef : undefined;
+  const ref = apiRef ?? (typeof feedbackToken === 'string' ? localFeedbackRef(feedbackToken) : undefined);
+  return ref ? { ...rest, feedbackRef: ref } : rest;
 }
 
 /**
- * Shows each call result's `feedbackToken` as `feedbackRef` and keeps it in the
- * session store. The ref is the signed token itself, so a rating resolves on any
- * instance and under any credential. Tokens on Firecrawl-internal calls are dropped.
+ * Shows each call result's ref as `feedbackRef` and keeps its token in the session store.
+ * The ref is the API's short ref, which resolves on any process, or else a local ref for
+ * the token; every ref fits MAX_FEEDBACK_REF_LENGTH. Firecrawl-internal calls get none.
  */
 export function withFeedbackRefs<T>(body: T, store: FeedbackTokenStore): T {
   const top = swapToken(body, store);
