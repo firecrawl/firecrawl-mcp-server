@@ -428,6 +428,7 @@ const paperSchema = z.looseObject({
   ids: unknown('Source identifiers by namespace, such as `arxiv`, `doi`, or `pmid`.'),
   title: str('Paper title.'),
   abstract: str('Paper abstract.'),
+  passage: str('Body passage that best matches the query, present only for papers with licensed full text.'),
   authors: unknown('Authors, as a list of names or a comma-joined string.'),
   categories: z.array(z.string()).nullable().optional().describe('Paper categories, such as `cs.LG`.'),
   createdDate: str('Date the paper was first indexed or published (`YYYY-MM-DD`).'),
@@ -442,7 +443,8 @@ export const researchSearchOutputSchema = z
 
 export const researchPaperOutputSchema = z
   .object({
-    paper: paperSchema.optional().describe('Canonical metadata for the requested paper, absent when it was not found.'),
+    // A direct object property is advertised closed, unlike the array items above, so it is parsed closed too.
+    paper: z.object(paperSchema.shape).optional().describe('Canonical metadata for the requested paper, absent when it was not found.'),
   })
   .describe('Canonical metadata for one paper.');
 

@@ -14,14 +14,14 @@
       }
     },
     "tools": [
-      "firecrawl_research_search_papers@b87270f75611",
-      "firecrawl_research_inspect_paper@ee63ff8d6e52",
-      "firecrawl_research_related_papers@f3564b29cad4",
+      "firecrawl_research_search_papers@4778e1d0ea9b",
+      "firecrawl_research_inspect_paper@411cfef56572",
+      "firecrawl_research_related_papers@0dea59a6c585",
       "firecrawl_research_read_paper@ed42c5997595",
       "firecrawl_developer_search@10c89c8f8c30",
       "firecrawl_gov_search@75d315dc41e7",
       "people_company_search@f92da903a36f",
-      "people_company_enrich@d72635ff6928",
+      "people_company_enrich@9b9d5afca74c",
       "jobs_search@206a7e3f525b",
       "firecrawl_search@bdb6cf3f549f",
       "firecrawl_find_tools@d138e7a0897b",

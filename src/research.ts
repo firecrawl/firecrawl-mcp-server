@@ -74,6 +74,8 @@ function withQuery(path: string, params: URLSearchParams): string {
 const MAX_AUTHORS = 15;
 // Cap each abstract so a page of hits stays within the MCP output-token limit.
 const MAX_ABSTRACT_CHARS = 600;
+// Cap the matched body passage on the same budget.
+const MAX_PASSAGE_CHARS = 1000;
 // Hard ceiling on the whole authors line, as a final guard.
 const MAX_AUTHORS_LINE_CHARS = 400;
 
@@ -83,6 +85,7 @@ interface PaperHit {
   ids?: Record<string, string[]>;
   title?: string;
   abstract?: string;
+  passage?: string;
   authors?: string | string[];
   categories?: string[];
   createdDate?: string;
@@ -139,6 +142,11 @@ function fmtHits(results?: PaperHit[]): string {
           .replace(/\s+/g, ' ')
           .slice(0, MAX_ABSTRACT_CHARS)
       );
+      if (r.passage)
+        lines.push(
+          'Passage: ' +
+            r.passage.replace(/\s+/g, ' ').slice(0, MAX_PASSAGE_CHARS)
+        );
       return lines.join('\n');
     })
     .join('\n\n');
@@ -414,7 +422,7 @@ Search paper metadata and abstracts with a natural-language query across the ind
 
 Several distinct framings of the same question surface different papers than a single query does.
 
-Returns ranked papers with canonical IDs, titles, authors, and abstracts.
+Returns ranked papers with canonical IDs, titles, authors, and abstracts. Papers with licensed full text also carry the body passage that best matches the query.
 `,
     outputSchema: researchSearchOutputSchema,
     parameters: z.object({

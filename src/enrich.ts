@@ -200,7 +200,12 @@ const searchRow = z.looseObject({
   source: z.string().describe('The provider that returned the row.'),
 });
 
-const searchResultSchema = z.looseObject({
+/**
+ * The advertised schema refuses keys it does not name at the top level and inside `chain`, so both are parsed
+ * closed: a key the API adds is dropped from structured content instead of failing a client that validates the
+ * result against the advertised schema. The text block carries the whole answer.
+ */
+const searchResultSchema = z.object({
   results: z.array(searchRow).optional().describe('People or companies, deduplicated, with no emails or phones.'),
   count: z.number().optional().describe('Rows returned; with count_only, how many records match.'),
   next_cursor: z.string().optional().describe('Pass as cursor, with the same filters, for more rows.'),
@@ -208,7 +213,7 @@ const searchResultSchema = z.looseObject({
     .array(z.looseObject({ name: z.string(), capability: z.string(), leg: z.string().optional(), status: z.string(), returned: z.number(), dropped: z.number().optional(), unverified: z.number().optional(), credits: z.number(), credits_pending: z.number().optional(), ms: z.number().optional(), error: z.string().optional() }))
     .optional()
     .describe('Each provider call in order. leg is company or people when a company search fed a people search.'),
-  chain: z.looseObject({}).optional().describe('When set, the filters the company search and the people search each applied.'),
+  chain: z.object({}).optional().describe('When set, the filters the company search and the people search each applied.'),
   credits: z.number().optional().describe('Credits charged by the provider calls.'),
   credits_pending: z.number().optional().describe('The most that calls whose charge was not confirmed, such as a timeout, can still bill.'),
   stopped: z.string().optional().describe('max_credits when a provider was not started for the cap, team_quota when the team ran out of credits.'),
@@ -289,7 +294,8 @@ const enrichRecord = z.looseObject({
     .describe('Per filled field (work_email, personal_email, mobile, profile, firmographics), what backs the answer.'),
 });
 
-const enrichResultSchema = z.looseObject({
+/** Parsed closed at the top level, as it is advertised; see searchResultSchema. */
+const enrichResultSchema = z.object({
   people: z.array(enrichRecord).optional(),
   companies: z.array(enrichRecord).optional(),
   credits_used: z.number().optional().describe('Credits charged: the listed price of each provider that found something.'),
@@ -369,11 +375,11 @@ export function registerEnrichTools(
     annotations: { title: 'Look up and enrich people or companies', readOnlyHint: true, openWorldHint: true, destructiveHint: false },
     canList,
     description:
-      'Use this first when the user names a person (a name with a company or domain, a LinkedIn URL or an email) or a company and wants contact details, a profile or firmographics, such as the email of a founder at a given company. One call runs the provider waterfall. Use it, not people_company_search, whenever you have a name with a company or domain, a LinkedIn URL or an email. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to ' + ENRICH_MAX_RECORDS + ' records per call. ' +
-      'Each requested field runs a waterfall by default: Firecrawl tries the providers that can use your inputs one at a time, ordered by listed price, and stops as soon as the field is found. ' +
-      'Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile in the same call. Ask for mobile only when the task needs a phone number; it is the costliest field and nothing is spent on it otherwise. ' +
-      'A work email is on the company domain when one is known and never on a known free-mail domain or a known role mailbox; fields says for each answer which provider gave it, whether the email was verified and whether its domain matched. Set verified_only to get only verified emails. ' +
-      "Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it the call is uncapped. " +
+      'Use this first when the user names a person (a name with a company or domain, a LinkedIn URL or an email) or a company and wants contact details, a profile or firmographics, such as the email of a founder at a given company. Use it, not people_company_search, whenever you have one of those identifiers. Give people (name with company or domain, LinkedIn URL, email or phone) or companies (domain, name or LinkedIn URL), up to ' + ENRICH_MAX_RECORDS + ' records per call. ' +
+      'Each requested field runs a waterfall: Firecrawl tries the providers that can use your inputs one at a time, by listed price, and stops when the field is found. ' +
+      'Without contact_fields a person gets a profile and a company gets firmographics; with contact_fields (work_email, personal_email, mobile) each person gets those values and, unless profile is false, the profile too. Ask for mobile only when a phone number is needed: it is the costliest field. ' +
+      'A work email is never on a known free-mail domain or role mailbox, and is on the company domain when one is found there; otherwise an address at another employer may be returned with domain_match false and warning "employer_mismatch" in fields.work_email: treat it as unconfirmed. fields says for each answer which provider gave it, whether the email was verified and its domain matched. verified_only returns only verified emails. ' +
+      "Each result is the provider's raw response, tagged with the provider. A provider that finds the value is charged its listed price; misses are free. max_credits caps the call; without it there is no cap. " +
       'To call one specific provider, use ' + (alexandriaTools === 'dedicated' ? 'alexandria_library_read' : 'firecrawl_scrape with an alexandria body') + ' instead. ' +
       'Example: ' + JSON.stringify(ENRICH_EXAMPLE) + '.',
     outputSchema: enrichResultSchema,
