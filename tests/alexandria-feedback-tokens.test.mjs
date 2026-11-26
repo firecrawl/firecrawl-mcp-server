@@ -13,23 +13,21 @@ test('the retention contract is 20 tokens for 24 hours', () => {
   assert.equal(FEEDBACK_TOKEN_TTL_MS, 24 * 60 * 60 * 1000);
 });
 
-test('a repeated token keeps its ref and is stored once', () => {
+test('a repeated token is stored once', () => {
   const store = new FeedbackTokenStore();
-  assert.equal(store.add('a'), 'c1');
-  assert.equal(store.add('b'), 'c2');
-  assert.equal(store.add('a'), 'c1');
+  store.add('a');
+  store.add('b');
+  store.add('a');
   assert.deepEqual(store.tokens(), ['a', 'b']);
 });
 
-test('the store keeps the newest tokens up to the limit and never reuses a ref', () => {
+test('the store keeps the newest tokens up to the limit', () => {
   const store = new FeedbackTokenStore();
   for (let i = 0; i < 23; i += 1) store.add(`t${i}`);
   assert.equal(store.size, 20);
   assert.equal(store.tokens()[0], 't3');
-  assert.equal(store.tokenForRef('c1'), undefined);
-  assert.equal(store.tokenForRef('c4'), 't3');
   store.remove(store.tokens());
-  assert.equal(store.add('fresh'), 'c24');
+  assert.equal(store.size, 0);
 });
 
 test('tokens expire after 24 hours', () => {
@@ -41,7 +39,6 @@ test('tokens expire after 24 hours', () => {
   assert.deepEqual(store.tokens(), ['old', 'new']);
   now += 2;
   assert.deepEqual(store.tokens(), ['new']);
-  assert.equal(store.tokenForRef('c1'), undefined);
 });
 
 test('sessions and credentials get separate stores', () => {
@@ -55,7 +52,7 @@ test('sessions and credentials get separate stores', () => {
   assert.notEqual(registry.forSession(undefined, 'fc-b'), keyed);
 });
 
-test('withFeedbackRefs swaps provider tokens for refs and drops internal ones', () => {
+test('withFeedbackRefs shows provider tokens as refs and drops internal ones', () => {
   const store = new FeedbackTokenStore();
   const body = {
     success: true,
@@ -71,7 +68,7 @@ test('withFeedbackRefs swaps provider tokens for refs and drops internal ones', 
   const out = withFeedbackRefs(body, store);
   assert.deepEqual(
     out.data.alexandria.map((item) => [item.feedbackRef, item.feedbackToken]),
-    [['c1', undefined], ['c2', undefined], [undefined, undefined], [undefined, undefined]]
+    [['tok-1', undefined], ['tok-2', undefined], [undefined, undefined], [undefined, undefined]]
   );
   assert.deepEqual(store.tokens(), ['tok-1', 'tok-2']);
   assert.equal(body.data.alexandria[0].feedbackToken, 'tok-1');
@@ -80,6 +77,6 @@ test('withFeedbackRefs swaps provider tokens for refs and drops internal ones', 
 test('withFeedbackRefs handles a flat single-call response', () => {
   const store = new FeedbackTokenStore();
   const out = withFeedbackRefs({ success: true, provider: 'fred', capability: 'x', feedbackToken: 'tok-1' }, store);
-  assert.equal(out.feedbackRef, 'c1');
+  assert.equal(out.feedbackRef, 'tok-1');
   assert.equal(out.feedbackToken, undefined);
 });
