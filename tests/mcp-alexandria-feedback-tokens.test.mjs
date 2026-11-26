@@ -88,6 +88,12 @@ test('an unverifiable ref is sent as given and the API rejection reaches the age
   assert.deepEqual(feedbackBodies(api)[0].callRatings, [{ token: 'c1', rating: 'bad' }]);
 });
 
+test('a rating by a short ref the API issued is sent as a ref', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  toolText(await feedback(client, { callRatings: [{ ref: 'aAbCdE12345', rating: 'good' }] }));
+  assert.deepEqual(feedbackBodies(api)[0].callRatings, [{ ref: 'aAbCdE12345', rating: 'good' }]);
+});
+
 test('at most 20 tokens are sent and the oldest are dropped', async (t) => {
   const { api, client } = await startStdioWithApi(t, { feedbackTokens: true });
   for (let i = 0; i < 12; i += 1) await execute(client);

@@ -80,3 +80,21 @@ test('withFeedbackRefs handles a flat single-call response', () => {
   assert.equal(out.feedbackRef, 'tok-1');
   assert.equal(out.feedbackToken, undefined);
 });
+
+test('withFeedbackRefs shows the short ref the API issued and keeps the token', () => {
+  const store = new FeedbackTokenStore();
+  const out = withFeedbackRefs(
+    {
+      success: true,
+      data: {
+        alexandria: [
+          { provider: 'fred', capability: 'x', feedbackToken: 'tok-1', feedbackRef: 'aAbCdE12345' },
+          { provider: 'fred', capability: 'y', feedbackToken: 'tok-2', feedbackRef: 'not-an-api-ref' },
+        ],
+      },
+    },
+    store
+  );
+  assert.deepEqual(out.data.alexandria.map((item) => item.feedbackRef), ['aAbCdE12345', 'tok-2']);
+  assert.deepEqual(store.tokens(), ['tok-1', 'tok-2']);
+});

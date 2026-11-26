@@ -74,18 +74,22 @@ type Node = Record<string, unknown>;
 const isNode = (value: unknown): value is Node =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+/** Matches a short ref the Firecrawl API issued and resolves itself. */
+export const API_FEEDBACK_REF = /^a[A-Za-z0-9_-]{10}$/;
+
 function swapToken(node: unknown, store: FeedbackTokenStore): unknown {
   if (!isNode(node) || typeof node.feedbackToken !== 'string') return node;
-  const { feedbackToken, ...rest } = node;
+  const { feedbackToken, feedbackRef, ...rest } = node;
   if (rest.provider === 'firecrawl') return rest;
   store.add(feedbackToken);
-  return { ...rest, feedbackRef: feedbackToken };
+  const apiRef = typeof feedbackRef === 'string' && API_FEEDBACK_REF.test(feedbackRef) ? feedbackRef : undefined;
+  return { ...rest, feedbackRef: apiRef ?? feedbackToken };
 }
 
 /**
- * Shows each call result's `feedbackToken` as `feedbackRef` and keeps it in the
- * session store. The ref is the signed token itself, so a rating resolves on any
- * instance and under any credential. Tokens on Firecrawl-internal calls are dropped.
+ * Shows each call result's ref as `feedbackRef` and keeps its token in the session
+ * store. The ref is the API's short ref when it issued one, else the signed token;
+ * both resolve on any instance. Tokens on Firecrawl-internal calls are dropped.
  */
 export function withFeedbackRefs<T>(body: T, store: FeedbackTokenStore): T {
   const top = swapToken(body, store);

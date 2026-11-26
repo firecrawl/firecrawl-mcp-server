@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { FeedbackTokenStore } from './alexandria-feedback-tokens.js';
+import { API_FEEDBACK_REF, type FeedbackTokenStore } from './alexandria-feedback-tokens.js';
 
 const detail = z.string().trim().min(1).max(2000);
 const name = z.string().trim().min(1).max(200);
@@ -105,17 +105,23 @@ export function withAlexandriaFeedbackHint<T>(
   return { ...envelope, feedbackTool: ALEXANDRIA_FEEDBACK_HINT };
 }
 
-/** The session's call tokens and per-call ratings in the shape the feedback API takes; a ref is the call's token. */
+/**
+ * The session's call tokens and per-call ratings in the shape the feedback API takes.
+ * A ref the API issued is sent as a ref; any other ref is the call's token.
+ */
 export function alexandriaFeedbackTokens(
   callRatings: { ref: string; rating: 'good' | 'partial' | 'bad' }[] | undefined,
   store: FeedbackTokenStore
 ) {
   const rated = new Map((callRatings ?? []).map(({ ref, rating }) => [ref, rating]));
+  const ratedTokens = [...rated.keys()].filter((ref) => !API_FEEDBACK_REF.test(ref));
   const tokens = store.tokens();
   return {
     tokens,
-    callRatings: [...rated].map(([token, rating]) => ({ token, rating })),
-    sent: [...new Set([...tokens, ...rated.keys()])],
+    callRatings: [...rated].map(([ref, rating]) =>
+      API_FEEDBACK_REF.test(ref) ? { ref, rating } : { token: ref, rating }
+    ),
+    sent: [...new Set([...tokens, ...ratedTokens])],
   };
 }
 
