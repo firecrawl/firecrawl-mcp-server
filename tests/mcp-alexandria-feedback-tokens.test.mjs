@@ -81,6 +81,13 @@ test('rejectedTokens from the API is passed through to the agent', async (t) => 
   assert.equal(toolText(await feedback(client)).rejectedTokens, 2);
 });
 
+test('an unverifiable ref is sent as given and the API rejection reaches the agent', async (t) => {
+  const { api, client } = await startStdioWithApi(t, { rejectedTokens: 1 });
+  const result = toolText(await feedback(client, { callRatings: [{ ref: 'c1', rating: 'bad' }] }));
+  assert.equal(result.rejectedTokens, 1);
+  assert.deepEqual(feedbackBodies(api)[0].callRatings, [{ token: 'c1', rating: 'bad' }]);
+});
+
 test('at most 20 tokens are sent and the oldest are dropped', async (t) => {
   const { api, client } = await startStdioWithApi(t, { feedbackTokens: true });
   for (let i = 0; i < 12; i += 1) await execute(client);
