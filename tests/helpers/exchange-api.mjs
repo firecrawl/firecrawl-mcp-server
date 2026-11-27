@@ -190,6 +190,9 @@ async function startFakeExchangeApi(options = {}) {
         return json(403, options.providerRefusal ? { success: false, error: options.providerRefusal } : TERMS_REQUIRED_BODY);
       }
       if (parsedBody?.url) {
+        if (options.scrapeRefusal && parsedBody.domainTools) {
+          return json(403, { success: false, error: options.scrapeRefusal });
+        }
         return json(200, {
           success: true,
           data: parsedBody.domainTools
