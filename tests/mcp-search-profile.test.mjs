@@ -1515,6 +1515,9 @@ test('search surface still answers firecrawl_find_tools for clients that cached 
   const message = parseSseJson(await res.text());
   assert.equal(message.error, undefined, JSON.stringify(message));
   assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  const forwarded = backend.requests.find((request) => JSON.stringify(request.body ?? '').includes('find-tools'));
+  assert.ok(forwarded, JSON.stringify(backend.requests.map((request) => request.url)));
+  assert.match(JSON.stringify(forwarded.body), /"providers":\["fred"\]/);
 });
 
 test('search surface executes an Alexandria capability through firecrawl_scrape without a feedback pointer', async (t) => {
