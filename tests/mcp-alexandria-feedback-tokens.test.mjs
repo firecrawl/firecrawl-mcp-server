@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
-import { callToken, EXCHANGE_CALL } from './helpers/exchange-api.mjs';
+import { startStdio, startStdioWithApi, toolText } from './helpers/exchange-mcp.mjs';
+import { apiRef, callToken, EXCHANGE_CALL, startFakeExchangeApi } from './helpers/exchange-api.mjs';
+import { localFeedbackRef, MAX_FEEDBACK_REF_LENGTH } from '../dist/alexandria-feedback-tokens.js';
 
 const FEEDBACK = {
   endpoint: 'alexandria',
@@ -14,12 +15,48 @@ const execute = (client) => client.request('tools/call', { name: 'alexandria_lib
 const feedback = (client, args = {}) => client.request('tools/call', { name: 'firecrawl_feedback', arguments: { ...FEEDBACK, ...args } });
 const feedbackBodies = (api) => api.requests.filter((request) => request.url === '/v2/feedback').map((request) => request.body);
 
-test('call tokens are replaced by short refs in the tool output', async (t) => {
-  const { client } = await startStdioWithApi(t, { feedbackTokens: true });
-  const text = (await execute(client)).content[0].text;
-  assert.doesNotMatch(text, /feedbackToken|fbk\./);
-  const results = JSON.parse(text).data.alexandria;
-  assert.deepEqual(results.map((item) => item.feedbackRef), ['c1', 'c2']);
+test('every ref handed out is at most 32 characters, with or without the API ref', async (t) => {
+  assert.equal(MAX_FEEDBACK_REF_LENGTH, 32);
+  for (const options of [{ feedbackTokens: true }, { feedbackTokens: true, feedbackRefs: true }, { feedbackRefs: true }]) {
+    const { client } = await startStdioWithApi(t, options);
+    const text = (await execute(client)).content[0].text;
+    assert.doesNotMatch(text, /feedbackToken/);
+    const refs = JSON.parse(text).data.alexandria.map((item) => item.feedbackRef);
+    const expected = options.feedbackRefs
+      ? [apiRef(1, 0), apiRef(1, 1)]
+      : [localFeedbackRef(callToken(1, 0)), localFeedbackRef(callToken(1, 1))];
+    assert.deepEqual(refs, expected);
+    for (const ref of refs) assert.ok(ref.length <= MAX_FEEDBACK_REF_LENGTH, ref);
+  }
+});
+
+test('a local ref is sent as its token on the process that holds it', async (t) => {
+  const { api, client } = await startStdioWithApi(t, { feedbackTokens: true });
+  const [call] = toolText(await execute(client)).data.alexandria;
+  const result = toolText(await feedback(client, { callRatings: [{ ref: call.feedbackRef, rating: 'bad' }] }));
+  assert.equal(result.note, undefined);
+  assert.deepEqual(feedbackBodies(api)[0].callRatings, [{ token: callToken(1, 0), rating: 'bad' }]);
+});
+
+test('a local ref this process does not hold is reported back', async (t) => {
+  const { api, client } = await startStdioWithApi(t, { feedbackTokens: true });
+  const result = toolText(
+    await feedback(client, { callRatings: [{ ref: localFeedbackRef('elsewhere'), rating: 'bad' }, { ref: 'c1', rating: 'good' }] })
+  );
+  assert.equal(result.note, `Ignored call ratings for unknown or expired refs: ${localFeedbackRef('elsewhere')}, c1.`);
+  assert.equal(feedbackBodies(api)[0].callRatings, undefined);
+});
+
+test('a call rated by its API ref on another server instance keeps its rating', async (t) => {
+  const api = await startFakeExchangeApi({ feedbackTokens: true, feedbackRefs: true });
+  t.after(() => api.close());
+  const env = { CLOUD_SERVICE: 'false', FIRECRAWL_API_KEY: 'fc-exchange-test', FIRECRAWL_API_URL: api.url };
+  const first = await startStdio(t, env);
+  const second = await startStdio(t, env);
+  const [call] = toolText(await execute(first.client)).data.alexandria;
+  const result = toolText(await feedback(second.client, { callRatings: [{ ref: call.feedbackRef, rating: 'bad' }] }));
+  assert.equal(result.success, true);
+  assert.deepEqual(feedbackBodies(api)[0].callRatings, [{ ref: apiRef(1, 0), rating: 'bad' }]);
 });
 
 test('feedback sends the session tokens and clears them on success', async (t) => {
@@ -34,19 +71,17 @@ test('feedback sends the session tokens and clears them on success', async (t) =
   assert.equal(feedbackBodies(api)[1].tokens, undefined);
 });
 
-test('callRatings map refs to tokens, and unknown refs are dropped with a note', async (t) => {
+test('a signed token given as a ref is sent as a token', async (t) => {
   const { api, client } = await startStdioWithApi(t, { feedbackTokens: true });
   await execute(client);
   const result = toolText(
     await feedback(client, {
       callRatings: [
-        { ref: 'c1', rating: 'good' },
-        { ref: 'c2', rating: 'bad' },
-        { ref: 'c99', rating: 'bad' },
+        { ref: callToken(1, 0), rating: 'good' },
+        { ref: callToken(1, 1), rating: 'bad' },
       ],
     })
   );
-  assert.match(result.note, /c99/);
   assert.equal(result.success, true);
   const body = feedbackBodies(api)[0];
   assert.deepEqual(body.callRatings, [
@@ -71,6 +106,19 @@ test('rejectedTokens from the API is passed through to the agent', async (t) => 
   assert.equal(toolText(await feedback(client)).rejectedTokens, 2);
 });
 
+test('an unverifiable ref is sent as given and the API rejection reaches the agent', async (t) => {
+  const { api, client } = await startStdioWithApi(t, { rejectedTokens: 1 });
+  const result = toolText(await feedback(client, { callRatings: [{ ref: 'v1.bad.sig', rating: 'bad' }] }));
+  assert.equal(result.rejectedTokens, 1);
+  assert.deepEqual(feedbackBodies(api)[0].callRatings, [{ token: 'v1.bad.sig', rating: 'bad' }]);
+});
+
+test('a rating by a ref shaped like a short API ref is sent as a ref', async (t) => {
+  const { api, client } = await startStdioWithApi(t);
+  toolText(await feedback(client, { callRatings: [{ ref: 'aAbCdE12345', rating: 'good' }] }));
+  assert.deepEqual(feedbackBodies(api)[0].callRatings, [{ ref: 'aAbCdE12345', rating: 'good' }]);
+});
+
 test('at most 20 tokens are sent and the oldest are dropped', async (t) => {
   const { api, client } = await startStdioWithApi(t, { feedbackTokens: true });
   for (let i = 0; i < 12; i += 1) await execute(client);
@@ -88,10 +136,9 @@ test('retained results list the refs next to nextTool', async (t) => {
   };
   const { api, client } = await startStdioWithApi(t, { largeResult, bashRecovery: 'available' });
   const text = (await execute(client)).content[0].text;
-  assert.doesNotMatch(text, /fbk\./);
   const result = JSON.parse(text);
   assert.equal(result.delivery, 'retained');
-  assert.deepEqual(result.feedbackRefs, [{ provider: 'fred', capability: 'series/observations', feedbackRef: 'c1' }]);
+  assert.deepEqual(result.feedbackRefs, [{ provider: 'fred', capability: 'series/observations', feedbackRef: localFeedbackRef(callToken(1, 0)) }]);
   toolText(await feedback(client));
   assert.deepEqual(feedbackBodies(api)[0].tokens, [callToken(1, 0)]);
 });

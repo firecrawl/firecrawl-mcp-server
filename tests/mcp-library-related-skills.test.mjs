@@ -114,13 +114,15 @@ test('a failed library command still fails at once, whatever the lookup does', a
   assert.match(failed.content[0].text, /ran past its deadline/);
 });
 
-test('alexandria_library_search is always loaded and opens with the line to check skills first; no separate skills read tool is listed', async (t) => {
+test('alexandria_library_search is always loaded and opens with the data source first and skills second; no separate skills read tool is listed', async (t) => {
   const { client, init } = await startStdioWithApi(t);
   const { tools } = await client.request('tools/list', {});
   const library = tools.find((tool) => tool.name === 'alexandria_library_search');
   assert.equal(library._meta?.['anthropic/alwaysLoad'], true);
-  assert.match(library.description, /^Check \/library\/skills first for any business workflow/);
-  assert.match(init.instructions, /Check \/library\/skills through alexandria_library_search first for any business workflow/);
+  assert.match(library.description, /^Find the data source for the task first: [^.]*\. For a specific workflow a skill may cover \([^)]*\), `cat \/library\/skills\/search\/<words>` /);
+  assert.doesNotMatch(library.description, /Check \/library\/skills first/);
+  assert.match(init.instructions, /Find a task's data source through alexandria_library_search first; when a specific step-by-step workflow may have a skill, search \/library\/skills there\. /);
+  assert.doesNotMatch(init.instructions, /Check \/library\/skills through alexandria_library_search first/);
   assert(!tools.some((tool) => tool.name === 'firecrawl_skills'));
 });
 

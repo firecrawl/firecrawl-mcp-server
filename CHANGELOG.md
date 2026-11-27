@@ -1,6 +1,24 @@
 # Changelog
 
-## [Unreleased]
+## [3.42.0] - 2026-11-27
+
+### Added
+
+- The `skills` hook of `unstable_hooks` serves Agent Skills through the MCP Skills extension (`io.modelcontextprotocol/skills`, SEP-2640) on protocol revision 2026-07-28, with `modernProtocol` on. Each skill is `{ path, files }`: `skills/list` returns the entries in the order given, each with its frontmatter and the digest and size of every file, `skills/get` returns one by its `skill://<path>/SKILL.md` URI (an unknown URI is `-32602`), and `resources/read` serves the files (as text when they are UTF-8). Results carry `cacheScope: "private"`, since `serveSkills` can make them differ per session. Two skills at the same path make `start` reject. `server/discover` declares the extension and `resources`; skill files are not added to `resources/list`. `serveSkills(session)` limits the skills to the sessions it returns true for; other sessions see neither the extension nor the files. A skill that breaks the Agent Skills format makes `start` reject. Servers without the hook, and every 2025-era session, are unchanged: same `initialize` result, tools, resources and instructions.
+
+### Fixed
+
+- `firecrawl_search_feedback` says which ID it takes when the API finds no search for the one it was given. Agents send it a scrape or map job's ID, or an all-zero placeholder, and the answer was only `search job not found for this team.`, so the next call repeated the mistake. The `error` of a `SEARCH_NOT_FOUND` rejection now ends with: `searchId` is the top-level `id` of a `firecrawl_search` result, and a scrape, map or parse job is rated with `firecrawl_feedback` and that job's ID (the second part only where `firecrawl_feedback` is registered). The call is still rejected, every other rejection reads as before, and the tool definitions are unchanged.
+- `people_company_search` results that chained a company search into a people search reach clients that check a result against the listed output schema. The schema lists `chain` as an object with no keys of its own, while the result carried the filters each search applied inside it, so those clients refused the whole call with `Structured content does not match the tool's output schema: data/chain must NOT have additional properties`. `chain` is now `{}` in `structuredContent` when a chain ran; `providers[].leg` still says which search each provider call belonged to, and the text block still carries the filters. For the same reason, a key the listed schema does not name is now left out of `structuredContent` instead of failing the call: at the top level of `people_company_search` and `people_company_enrich` results, and inside `paper` for `firecrawl_research_inspect_paper`. The text blocks and the tool definitions are unchanged.
+
+### Changed
+
+- The search companion that `CLOUD_SERVICE=true` starts lists `alexandria_library_search` and `alexandria_library_read`, as the full surface does, and no longer lists `firecrawl_find_tools`. Its server instructions, `firecrawl_search` description and parameter text, empty-query error and `firecrawl_scrape` description name the library tools, and its `firecrawl_scrape` lists `url` only. The full and keyless surfaces are unchanged.
+- `@modelcontextprotocol/server` and `@modelcontextprotocol/client` 2.4.0, the release that adds the Skills extension.
+- `alexandria_library_search`'s description opens with the data source instead of the skills. Its first sentence now says to find the data source for the task first, with `grep -ril "<word>" /library`; the skills under `/library/skills` come second, for a step-by-step workflow or to explore, with the same `cat /library/skills/search/<words>` lookup. The server instructions of sessions that list the skills change the same way: their sentence on checking `/library/skills` first now names the data source first and the skills second. The opening is as long as before, everything after it is unchanged, and so are the input schema, the annotations and the tool's behaviour.
+- `people_company_enrich`'s description no longer says a work email is always on the company domain when one is known. It says the address is on the company domain when one is found there, and that otherwise an address at another employer may be returned with `domain_match` false and `warning` `"employer_mismatch"` in `fields.work_email`, to be treated as unconfirmed. Only the description text changes; the input and output schemas and the tool's behaviour are unchanged.
+
+## [3.41.0] - 2026-11-17
 
 ### Added
 

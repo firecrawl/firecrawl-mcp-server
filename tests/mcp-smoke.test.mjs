@@ -445,6 +445,20 @@ async function startFakeFirecrawlApi({ searchResponse } = {}) {
       return;
     }
 
+    // Two reserved search IDs get rejections without details: no such search
+    // for the account, and an expired window.
+    const rejectedSearchFeedback = {
+      '/v2/search/00000000-0000-4000-8000-000000000006/feedback': [404, 'SEARCH_NOT_FOUND', 'search job not found for this team.'],
+      '/v2/search/00000000-0000-0000-0000-000000000000/feedback': [404, 'SEARCH_NOT_FOUND', 'search job not found for this team.'],
+      '/v2/search/00000000-0000-4000-8000-000000000007/feedback': [409, 'FEEDBACK_WINDOW_EXPIRED', 'Feedback must be submitted within 300 seconds of the job.'],
+    }[req.url];
+    if (req.method === 'POST' && rejectedSearchFeedback) {
+      const [status, feedbackErrorCode, error] = rejectedSearchFeedback;
+      res.writeHead(status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error, feedbackErrorCode, success: false }));
+      return;
+    }
+
     // Two reserved job IDs get /v2/feedback rejections that carry details:
     // INVALID_BODY, and an expired window, whose text must stay as sent.
     const rejectedFeedback = {
@@ -2246,7 +2260,61 @@ test('stdio transport calls Firecrawl API through a tool end to end', async (t) 
     arguments: { endpoint: 'scrape', jobId: '00000000-0000-4000-8000-000000000005', rating: 'good', note: 'Late' },
   });
   assert.equal(expiredJob.structuredContent.error, 'Feedback window expired.');
+
+  // An ID that is no search of the account (a scrape or map job's ID, or the
+  // all-zero placeholder) is still rejected, and the answer says which ID
+  // the tool takes and where the other job IDs go.
+  for (const searchId of ['00000000-0000-4000-8000-000000000006', '00000000-0000-0000-0000-000000000000']) {
+    const notFound = await client.request('tools/call', {
+      name: 'firecrawl_search_feedback',
+      arguments: { searchId, rating: 'good', valuableResults: [{ source: 'web', position: 1 }] },
+    });
+    assert.deepEqual(notFound.structuredContent, {
+      success: false,
+      status: 404,
+      feedbackErrorCode: 'SEARCH_NOT_FOUND',
+      error:
+        'search job not found for this team. `searchId` is the top-level `id` of a `firecrawl_search` result. To rate a scrape, map or parse job, call `firecrawl_feedback` with that job\'s ID.',
+      retryable: false,
+    });
+    assert.equal(JSON.parse(notFound.content[0].text).error, notFound.structuredContent.error);
+  }
+  // Any other search feedback rejection keeps the API's text as it is.
+  const expiredSearch = await client.request('tools/call', {
+    name: 'firecrawl_search_feedback',
+    arguments: { searchId: '00000000-0000-4000-8000-000000000007', rating: 'bad', querySuggestions: 'Late' },
+  });
+  assert.equal(expiredSearch.structuredContent.error, 'Feedback must be submitted within 300 seconds of the job.');
   assert.equal(stderr.includes('TypeError'), false, stderr);
+});
+
+test('a search feedback rejection for an unknown search names firecrawl_feedback only where it is registered', async (t) => {
+  const fakeApi = await startFakeFirecrawlApi();
+  t.after(() => fakeApi.close());
+  const child = spawnServer({
+    FIRECRAWL_API_KEY: 'fc-test',
+    FIRECRAWL_API_URL: fakeApi.url,
+    FIRECRAWL_NO_ENDPOINT_FEEDBACK: '1',
+  });
+  t.after(() => stopChild(child));
+  const client = new StdioMcpClient(child);
+  await client.request('initialize', {
+    capabilities: {},
+    clientInfo: { name: 'firecrawl-mcp-tool-e2e', version: '0.0.0' },
+    protocolVersion: '2025-06-18',
+  });
+  client.notify('notifications/initialized');
+
+  const { tools } = await client.request('tools/list', {});
+  assert.equal(tools.some((tool) => tool.name === 'firecrawl_feedback'), false);
+  const notFound = await client.request('tools/call', {
+    name: 'firecrawl_search_feedback',
+    arguments: { searchId: '00000000-0000-4000-8000-000000000006', rating: 'good', valuableResults: [{ source: 'web', position: 1 }] },
+  });
+  assert.equal(
+    notFound.structuredContent.error,
+    'search job not found for this team. `searchId` is the top-level `id` of a `firecrawl_search` result.'
+  );
 });
 
 test('HTTP cloud transport swaps an fco_ OAuth token for its introspected API key (once)', async (t) => {
@@ -4045,6 +4113,7 @@ test('firecrawl_agent_status flags a credit-limit stop and keeps its partial', a
   const status = async (id) => {
     const result = await client.request('tools/call', { arguments: { id }, name: 'firecrawl_agent_status' });
     assert.notEqual(result.isError, true);
+    assert.equal(result.structuredContent.id, id);
     return result;
   };
 
@@ -4091,9 +4160,10 @@ test('firecrawl_agent_status flags a credit-limit stop and keeps its partial', a
   assert.match(bareNotice, /start a new firecrawl_agent run with a higher maxCredits/);
   assert.equal('partial' in bare.structuredContent, false);
 
-  // Any other failure (and every completed run) is passed through unchanged.
+  // Other failures and completed runs add the job ID without a credit-limit notice.
   const ordinary = await status('00000000-0000-4000-8000-000000000043');
   const ordinaryPayload = {
+    id: '00000000-0000-4000-8000-000000000043',
     error: 'Agent failed',
     expiresAt: '2026-10-01T00:00:00.000Z',
     status: 'failed',
@@ -4104,7 +4174,7 @@ test('firecrawl_agent_status flags a credit-limit stop and keeps its partial', a
   assert.equal(ordinary.content[0].text, JSON.stringify(ordinaryPayload, null, 2));
   assert.deepEqual(ordinary.structuredContent, ordinaryPayload);
   const completed = await status('00000000-0000-4000-8000-000000000030');
-  assert.ok(completed.content[0].text.startsWith('{\n  "creditsUsed": 5,'));
+  assert.equal(JSON.parse(completed.content[0].text).creditsUsed, 5);
   assert.equal('notice' in completed.structuredContent, false);
 });
 

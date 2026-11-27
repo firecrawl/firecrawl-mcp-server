@@ -1,11 +1,11 @@
 {
   "name": "firecrawl",
-  "version": "3.40.0",
-  "description": "Official Firecrawl MCP server, the context API for AI agents: search, scrape, parse, crawl, map, and interact with the web, run Agent and Monitor jobs, and search scientific papers (PubMed, bioRxiv, medRxiv, arXiv).",
+  "version": "3.42.0",
+  "description": "Firecrawl MCP server: search, scrape, parse, crawl, map, and interact with the web, run Agent and Monitor jobs, search scientific papers (PubMed, bioRxiv, medRxiv, arXiv), and use hundreds of data providers in Firecrawl Alexandria.",
   "mcpServers": {
     "firecrawl": {
       "command": "npx",
-      "args": ["-y", "firecrawl-mcp@3.40.0"],
+      "args": ["-y", "firecrawl-mcp@3.42.0"],
       "env": {
         "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}"
       }

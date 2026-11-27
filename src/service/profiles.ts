@@ -1,5 +1,5 @@
 import {
-  ALEXANDRIA_SEARCH_INSTRUCTIONS,
+  ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS,
   normalizeHeader,
   withoutTrailingSlash,
 } from '../server.js';
@@ -53,12 +53,12 @@ export function getOAuthIssuer(): string {
 }
 
 // The search surface exposes web/developer/research search plus the two Alexandria
-// tools (catalogue lookup and provider execution). Its instructions
+// library tools (library exploration and provider execution). Its instructions
 // and tool copy describe just those tools and stay neutral about how a client
 // uses them.
 export const SEARCH_PROFILE_INSTRUCTIONS =
-  ALEXANDRIA_SEARCH_INSTRUCTIONS +
-  ` Firecrawl provides web, developer, government, and research search, and executes catalogued Alexandria data providers. Use firecrawl_search to find relevant results across the web and specialized indexes; authenticated searches also return matching Alexandria providers in data.tools. firecrawl_find_tools provides catalogue browsing and provider contracts; firecrawl_scrape with an alexandria body executes a selected capability; firecrawl_scrape with a url retrieves one supplied page. For a programming question, firecrawl_developer_search searches indexed public repositories, GitHub issues, merged pull requests, READMEs, and code documentation and returns the matched passages, and skills: "only" narrows it to agent-skill files; firecrawl_search with categories: ["developer"] reaches the same index beside ordinary web results, returning the hits in the web group rather than as passages and offering no skills filter. For a legal or regulatory question, firecrawl_gov_search searches primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications; firecrawl_search with categories: ["gov"] reaches the same sources in the web group and cannot be combined with other categories. For a biomedical, life-science, clinical, or arXiv literature question, the firecrawl_research_* tools search the paper index, while categories: ["research"] on firecrawl_search filters ordinary web results to research-affiliated websites. Use the firecrawl_research_* tools to search academic and research literature, expand from anchor papers via the citation graph, and read full-text passages from a specific paper. Search and discovery tools are read-only and return ranked results. Billing: web, developer, and research search are billed per request; government search is free; Alexandria discovery (firecrawl_search with sources ["alexandria"] alone, and firecrawl_find_tools) is free; firecrawl_scrape is billed, as a page retrieval in url mode or per executed capability in alexandria mode (pass includeCosts to firecrawl_find_tools to see prices).`;
+  ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS +
+  ` Firecrawl provides web, developer, government, and research search, and executes catalogued Alexandria data providers. Use firecrawl_search to find relevant results across the web and specialized indexes; authenticated searches also return matching Alexandria providers in data.tools. alexandria_library_search explores the Alexandria library and reads provider contracts, and alexandria_library_read runs selected capabilities; firecrawl_scrape with a url retrieves one supplied page. For a programming question, firecrawl_developer_search searches indexed public repositories, GitHub issues, merged pull requests, READMEs, and code documentation and returns the matched passages, and skills: "only" narrows it to agent-skill files; firecrawl_search with categories: ["developer"] reaches the same index beside ordinary web results, returning the hits in the web group rather than as passages and offering no skills filter. For a legal or regulatory question, firecrawl_gov_search searches primary law and regulatory material from US federal, state, and local government sources: statutes, regulations, codes, court opinions, and other government publications; firecrawl_search with categories: ["gov"] reaches the same sources in the web group and cannot be combined with other categories. For a biomedical, life-science, clinical, or arXiv literature question, the firecrawl_research_* tools search the paper index, while categories: ["research"] on firecrawl_search filters ordinary web results to research-affiliated websites. Use the firecrawl_research_* tools to search academic and research literature, expand from anchor papers via the citation graph, and read full-text passages from a specific paper. Search and discovery tools are read-only and return ranked results. Billing: web, developer, and research search are billed per request; government search is free; Alexandria discovery (firecrawl_search with sources ["alexandria"] alone, and alexandria_library_search) is free; alexandria_library_read is billed per executed capability, and firecrawl_scrape as a page retrieval.`;
 
 // The exact set of tools the search surface exposes. Registration is filtered
 // against this set, so anything not listed here can never appear on that
@@ -78,9 +78,13 @@ export const SEARCH_PROFILE_TOOLS = new Set<string>([
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
   'firecrawl_research_read_paper',
-  // Alexandria: catalogue lookup and provider execution.
+  // Page retrieval. firecrawl_find_tools and the alexandria body of
+  // firecrawl_scrape are unlisted and still answer.
   'firecrawl_find_tools',
   'firecrawl_scrape',
+  // Alexandria library: explore the library and run capabilities.
+  'alexandria_library_search',
+  'alexandria_library_read',
   // Alexandria people and company search and enrichment.
   'people_company_search',
   'people_company_enrich',
@@ -97,7 +101,6 @@ export const SEARCH_PROFILE_TOOLS = new Set<string>([
 export const SEARCH_SURFACE_VARIANT_TOOLS = new Set<string>([
   'firecrawl_search',
   'firecrawl_scrape',
-  'firecrawl_find_tools',
 ]);
 
 
