@@ -453,13 +453,6 @@ export interface FirecrawlMcpServerHooks {
   ) => Promise<void>;
   /** Built-in tools whose name fails the filter are not registered. */
   toolFilter?: (name: string) => boolean;
-  /**
-   * Where alexandria_library_search and alexandria_library_read are listed, also
-   * list firecrawl_find_tools and the firecrawl_scrape `alexandria` body with
-   * the definitions they have without them, for a surface whose tool list is
-   * fixed elsewhere. Unset, both are unlisted there and still answer.
-   */
-  listEarlierAlexandriaTools?: boolean;
   /** Adds HTTP routes. Runs before the built-in routes, so its routes win. */
   configureHttp?: (app: HttpApp) => void;
   /** Serve OAuth protected-resource metadata for this instance. */
@@ -574,6 +567,7 @@ export {
   ALEXANDRIA_LIBRARY_TOOL,
   ALEXANDRIA_READ_TOOL,
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
+  ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS,
   defaultDomainTools,
   hasAlexandria,
   normalizeSearchSources,
@@ -748,7 +742,6 @@ export function createFirecrawlMcpServer(
     ? 'dedicated'
     : 'legacy';
   const dedicatedAlexandria = alexandriaTools === 'dedicated';
-  const unlistEarlierAlexandria = dedicatedAlexandria && !hooks.listEarlierAlexandriaTools;
   const instructionDefaults: InstructionDefaults = {
     authenticated: fullProfileInstructions(
       alexandriaTools,
@@ -1405,7 +1398,7 @@ export function createFirecrawlMcpServer(
     })
     .refine(
       (args) => Boolean(args.url) !== Boolean(args.alexandria),
-      unlistEarlierAlexandria ? 'Provide a url' : 'Provide exactly one of url or alexandria'
+      dedicatedAlexandria ? 'Provide a url' : 'Provide exactly one of url or alexandria'
     )
     .refine(
       (args) =>
@@ -1838,7 +1831,7 @@ Scrape one URL and return its content: markdown by default, or HTML, links, scre
 
 Firecrawl may serve recently indexed content; set \`maxAge: 0\` for a live fetch or a smaller \`maxAge\` to bound staleness. A successful response does not by itself confirm the page is still current. ${SAFE_MODE ? 'A named browser profile loads saved session data without saving changes to it.' : 'Browser actions can change the live page when interactive actions are enabled.'} Authenticated responses can include a \`metadata.scrapeId\` for optional scrape feedback.
 
-${unlistEarlierAlexandria
+${dedicatedAlexandria
   ? `On an authenticated session, \`firecrawl_search\` and \`${ALEXANDRIA_LIBRARY_TOOL}\` can discover Alexandria providers for the same fields across several pages; a matching provider returns typed records in one \`${ALEXANDRIA_READ_TOOL}\` call.`
   : `On an authenticated session, \`firecrawl_search\` and \`firecrawl_find_tools\` can discover providers for the same fields across several pages; a matching provider returns typed records in one call.
 
@@ -1858,7 +1851,7 @@ With \`alexandria\` in place of \`url\`, the tool runs catalogued provider capab
       properties.formats.items.enum = properties.formats.items.enum.filter((format) => format !== 'json');
       // The alexandria body is no longer listed where alexandria_library_read
       // exists, and still runs for clients and prompts that learned it.
-      if (unlistEarlierAlexandria) {
+      if (dedicatedAlexandria) {
         delete properties.alexandria;
         delete properties.requestId;
         // An embedder may have made a field of its own required; keep those.
@@ -2230,7 +2223,7 @@ Returns result groups in \`data\` and an operation \`id\`.
 
   // Where alexandria_library_search exists, firecrawl_find_tools is no longer
   // listed and still answers, for sessions and prompts that learned it.
-  server.addTool(unlistEarlierAlexandria ? { ...findToolsTool, _meta: undefined, canList: () => false } : findToolsTool);
+  server.addTool(dedicatedAlexandria ? { ...findToolsTool, _meta: undefined, canList: () => false } : findToolsTool);
 
   const alexandriaReadSchema = z
     .object({
