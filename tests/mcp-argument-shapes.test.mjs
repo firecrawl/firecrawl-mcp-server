@@ -291,3 +291,125 @@ test('scheme-less URLs are read as https URLs', async (t) => {
   assert.equal(api.requests.length, before, 'refused URLs never reach the API');
 });
 
+
+test('unknown and misspelled fields are refused before the API is called', async (t) => {
+  const { api, full, search } = await startHosted(t);
+
+  for (const [label, call] of [['full', full], ['search surface', search]]) {
+    for (const [args, field, hint] of [
+      [{ url: 'https://example.com', maxage: 0 }, 'maxage', 'Did you mean "maxAge" for "maxage"?'],
+      [{ url: 'https://example.com', onlyMainContnet: false }, 'onlyMainContnet'],
+      [{ url: 'https://example.com', location: { country: 'CA', city: 'Toronto' } }, 'location.city'],
+    ]) {
+      const before = api.requests.length;
+      const refused = await call('firecrawl_scrape', args);
+      const text = rejectionText(refused);
+      assert.ok(text.includes(`"${field}"`), `${label}: ${field} is named`);
+      if (hint) assert.ok(text.includes(hint), `${label}: ${text}`);
+      assert.equal(refused.result?.structuredContent?.error?.code, 'invalid_request', `${label}: ${field} code`);
+      assert.deepEqual(refused.result.structuredContent.error.fields, [field], label);
+      assert.equal(api.requests.length, before, `${label}: ${field} never reaches the API`);
+    }
+
+    const before = api.requests.length;
+    const refusedSearch = await call('firecrawl_search', { query: 'laptops', limt: 3 });
+    assert.notEqual(rejectionText(refusedSearch), '', `${label}: misspelled search limit is refused`);
+    // The search surface already refuses unknown keys in its own schema.
+    if (label === 'full') {
+      assert.equal(refusedSearch.result?.structuredContent?.error?.code, 'invalid_request');
+      assert.deepEqual(refusedSearch.result.structuredContent.error.fields, ['limt']);
+    }
+    assert.equal(api.requests.length, before, `${label}: refused search never reaches the API`);
+
+    assertAccepted(await call('firecrawl_scrape', { url: 'https://example.com', maxAge: 0 }), `${label} maxAge`);
+    assert.equal(lastBody(api, '/v2/scrape').maxAge, 0, `${label}: declared fields still reach the API`);
+  }
+});
+
+test('fields from earlier tool definitions are still accepted and dropped', async (t) => {
+  const { api, full, search } = await startHosted(t);
+
+  for (const [label, call] of [['full', full], ['search surface', search]]) {
+    assertAccepted(
+      await call('firecrawl_search', {
+        query: 'firecrawl docs',
+        objective: 'Find the MCP docs',
+        clientModel: 'example-model',
+      }),
+      `${label} search`
+    );
+    const body = lastBody(api, '/v2/search');
+    assert.equal('objective' in body, false, label);
+    assert.equal('clientModel' in body, false, label);
+  }
+
+  assertAccepted(
+    await full('firecrawl_scrape', {
+      url: 'https://example.com',
+      objective: 'Read the page',
+      profile: { name: 'saved-login', saveChanges: true },
+    }),
+    'full scrape'
+  );
+  assert.equal('objective' in lastBody(api, '/v2/scrape'), false);
+
+  // Fields agents carry between Firecrawl tools or from older definitions.
+  assertAccepted(
+    await full('firecrawl_search', { query: 'firecrawl docs', conversationId: 'c-1', sessionId: 's-1' }),
+    'full search'
+  );
+  for (const [label, call] of [['full', full], ['search surface', search]]) {
+    assertAccepted(
+      await call('firecrawl_scrape', { url: 'https://example.com', conversationId: 'c-1', sessionId: 's-1' }),
+      `${label} scrape`
+    );
+  }
+  assertAccepted(
+    await full('firecrawl_scrape', {
+      url: 'https://example.com',
+      actions: [{ type: 'click', selector: '#submit' }],
+    }),
+    'hosted scrape still drops browser actions'
+  );
+  assert.equal('actions' in lastBody(api, '/v2/scrape'), false);
+});
+
+test('carried-over fields are only tolerated where they used to be accepted', async (t) => {
+  const { api, full } = await startHosted(t);
+  const before = api.requests.length;
+
+  for (const [args, field] of [
+    [{ url: 'https://example.com', location: { country: 'CA', objective: 'x' } }, 'location.objective'],
+    [{ url: 'https://example.com', location: { country: 'CA', actions: [] } }, 'location.actions'],
+    [{ url: 'https://example.com', saveChanges: true }, 'saveChanges'],
+  ]) {
+    const refused = await full('firecrawl_scrape', args);
+    assert.deepEqual(refused.result?.structuredContent?.error?.fields, [field], field);
+  }
+  assert.equal(api.requests.length, before, 'refused calls never reach the API');
+});
+
+test('unknown fields are found inside union-typed inputs and own keys only', async (t) => {
+  const { api, full } = await startHosted(t);
+  const before = api.requests.length;
+
+  for (const [args, field] of [
+    [{ alexandria: { provider: 'fred', capability: 'series/observations', bogus: 1 } }, 'alexandria.bogus'],
+    [{ url: 'https://example.com', constructor: 1 }, 'constructor'],
+  ]) {
+    const refused = await full('firecrawl_scrape', args);
+    assert.deepEqual(refused.result?.structuredContent?.error?.fields, [field], field);
+  }
+  assert.equal(api.requests.length, before, 'refused calls never reach the API');
+});
+
+test('a call with many unknown fields lists a bounded number of them', async (t) => {
+  const { api, full } = await startHosted(t);
+  const before = api.requests.length;
+  const junk = Object.fromEntries(Array.from({ length: 500 }, (_, i) => [`bogus${i}`, i]));
+  const refused = await full('firecrawl_scrape', { url: 'https://example.com', ...junk });
+  const { fields, message } = refused.result.structuredContent.error;
+  assert.equal(fields.length, 10);
+  assert.ok(message.includes('and 490 more'), message);
+  assert.equal(api.requests.length, before);
+});
