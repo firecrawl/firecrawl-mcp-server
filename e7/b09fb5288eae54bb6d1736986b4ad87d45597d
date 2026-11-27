@@ -1,0 +1,97 @@
+tests/mcp-search-profile.test.mjs
+  s_2a56bdb4351c48::t_d3aacc45ad0358 33-35,440,455-457,1271,1454,1485,1490-1491,1499-1501,1505-1520
+tests/alexandria-feedback-tokens.test.mjs
+  s_2a56bdb4351c48::t_d3aacc45ad0358 8,17,19-21,25,31,56,72,81,84-107
+tests/contract-snapshots/stdio-keyless.json
+  s_2a56bdb4351c48::t_d3aacc45ad0358 19,36-38
+tests/contract-snapshots/http-self-hosted.json
+  s_2a56bdb4351c48::t_d3aacc45ad0358 19,23,39-41
+src/alexandria.ts
+  s_2a56bdb4351c48::t_d3aacc45ad0358 279
+tests/contract-snapshots/hosted-search-companion.json
+  ai_agent 9,17-21,26,28-29
+tests/contract-snapshots/hosted-full.json
+  s_2a56bdb4351c48::t_d3aacc45ad0358 21,25,41-43,49
+tests/contract-snapshots/stdio-self-hosted.json
+  s_2a56bdb4351c48::t_d3aacc45ad0358 19,23,39-41
+CHANGELOG.md
+  s_2a56bdb4351c48::t_d3aacc45ad0358 3-21
+src/service/profiles.ts
+  s_2a56bdb4351c48::t_d3aacc45ad0358 2,56,60-61,81-82,85-87
+src/tool-output.ts
+  s_2a56bdb4351c48::t_d3aacc45ad0358 424,439-440
+tests/mcp-enrich-tools.test.mjs
+  s_2a56bdb4351c48::t_d3aacc45ad0358 196-237
+tests/mcp-smoke.test.mjs
+  s_2a56bdb4351c48::t_d3aacc45ad0358 448-461,2263-2287,2291-2319,4116,4163,4166,4177
+README.md
+  s_2a56bdb4351c48::t_d3aacc45ad0358 1371,1516,1525-1526,1531
+src/research.ts
+  s_2a56bdb4351c48::t_d3aacc45ad0358 77-78,88,145-149,425
+tests/mcp-library-related-skills.test.mjs
+  s_2a56bdb4351c48::t_d3aacc45ad0358 117,122-125
+package.json
+  s_2a56bdb4351c48::t_d3aacc45ad0358 3-4,38,70
+src/server.ts
+  s_2a56bdb4351c48::t_d3aacc45ad0358 23,437-445,555,574-576,598,687-691,814-815,870,2866,2871,2881-2891,3093-3100,3484,3491,3493-3494,3497-3503,3532,3818-3820,3830-3831
+pnpm-lock.yaml
+  ai_agent 16-17,32-33,267-268,271-272,285-286,1563,1565,1573,1599,1601
+src/enrich.ts
+  s_2a56bdb4351c48::t_d3aacc45ad0358 203-208,216,297-298,378-382
+src/mcp/runtime.ts
+  s_2a56bdb4351c48::t_d3aacc45ad0358 252-253,261-266,543-545,547,553,586,799,810-816
+src/skills.ts
+  s_2a56bdb4351c48::t_d3aacc45ad0358 1-97
+tests/mcp-tasks.test.mjs
+  s_2a56bdb4351c48::t_d3aacc45ad0358 18,28,56-58,276,292-302,320-321,425-449
+tests/contract-snapshots/stdio-api-key.json
+  s_2a56bdb4351c48::t_d3aacc45ad0358 8,19,23,39-41,47
+src/alexandria-feedback.ts
+  s_2a56bdb4351c48::t_d3aacc45ad0358 2,62,108-112,117-118,121-126,132-136
+tests/contract-snapshots/hosted-account.json
+  s_2a56bdb4351c48::t_d3aacc45ad0358 9,20,24,40-42,48
+tests/helpers/exchange-api.mjs
+  s_2a56bdb4351c48::t_d3aacc45ad0358 44,166,177,264
+gemini-extension.json
+  s_2a56bdb4351c48::t_d3aacc45ad0358 3-4,8
+tests/mcp-description-budget.test.mjs
+  s_2a56bdb4351c48::t_d3aacc45ad0358 26-27
+tests/mcp-output-schema-keys.test.mjs
+  s_2a56bdb4351c48::t_d3aacc45ad0358 1-70
+tests/mcp-skills.test.mjs
+  s_2a56bdb4351c48::t_d3aacc45ad0358 1-147
+tests/contract-snapshots/tool-definitions.json
+  ai_agent 246,255,2025,2173,4724,4805-4806,4809-4823,5546,5654-5664,5731,5739,5850-5860,6150,6158,6340,6349,6353-6355,8397,8405,8411,8420,9959,9967
+tests/contract-snapshots/hosted-search-primary.json
+  ai_agent 9,17-21,26,28-29
+tests/mcp-alexandria-skills.test.mjs
+  s_2a56bdb4351c48::t_d3aacc45ad0358 18-20
+src/alexandria-output.ts
+  s_2a56bdb4351c48::t_d3aacc45ad0358 188,192
+tests/mcp-alexandria-feedback-tokens.test.mjs
+  s_2a56bdb4351c48::t_d3aacc45ad0358 3-5,18-59,74,80-81,109-121,141
+src/tasks.ts
+  s_2a56bdb4351c48::t_d3aacc45ad0358 112,309
+src/alexandria-feedback-tokens.ts
+  s_2a56bdb4351c48::t_d3aacc45ad0358 7-12,14-20,31-32,34-35,39-40,42,45-46,48,95-102,106-108
+src/service/search-surface.ts
+  s_2a56bdb4351c48::t_d3aacc45ad0358 3-5,8,35,46,74,87,96,190-192
+server.json
+  s_2a56bdb4351c48::t_d3aacc45ad0358 5-6,15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e7b09fb5288eae54bb6d1736986b4ad87d45597d",
+  "prompts": {},
+  "sessions": {
+    "s_2a56bdb4351c48": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "161e359a-67b8-49a1-ae95-d4a0b6d2a473",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Developers Digest <124798203+developersdigest@users.noreply.github.com>"
+    }
+  }
+}
