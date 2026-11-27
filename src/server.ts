@@ -570,6 +570,9 @@ export {
 } from './recovery.js';
 export {
   ALEXANDRIA_CATALOGUE_VERTICALS,
+  ALEXANDRIA_DEDICATED_SEARCH_INSTRUCTIONS,
+  ALEXANDRIA_LIBRARY_TOOL,
+  ALEXANDRIA_READ_TOOL,
   ALEXANDRIA_SEARCH_INSTRUCTIONS,
   defaultDomainTools,
   hasAlexandria,
@@ -591,6 +594,7 @@ export {
   searchCategoriesAreCompatible,
   searchDomainsAreExclusive,
   searchToolBaseFields,
+  dedicatedSearchToolFields,
   SEARCH_RESULT_SOURCES,
   annotateResultPositions,
 } from './tool-helpers.js';

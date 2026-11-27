@@ -29,9 +29,10 @@ const SEARCH_TOOLS = [
   'firecrawl_research_inspect_paper',
   'firecrawl_research_related_papers',
   'firecrawl_research_read_paper',
-  // Alexandria: catalogue lookup and provider execution.
-  'firecrawl_find_tools',
   'firecrawl_scrape',
+  // Alexandria library: explore the library and run capabilities.
+  'alexandria_library_search',
+  'alexandria_library_read',
   // Alexandria people and company search and enrichment.
   'people_company_search',
   'people_company_enrich',
@@ -436,7 +437,7 @@ test('search surface lists exactly the nine contracted tools', async (t) => {
   const names = tools.map((tool) => tool.name);
   const search = tools.find((tool) => tool.name === 'firecrawl_search');
   assert.ok(search);
-  for (const name of ['firecrawl_search', 'firecrawl_scrape', 'firecrawl_find_tools']) {
+  for (const name of ['firecrawl_search', 'firecrawl_scrape']) {
     const tool = tools.find((item) => item.name === name);
     assert.equal(tool?._meta?.['anthropic/alwaysLoad'], true, name);
   }
@@ -451,8 +452,9 @@ test('search surface lists exactly the nine contracted tools', async (t) => {
   assert.doesNotMatch(search.description, /data\.developer/i);
   assert.doesNotMatch(search.description, /not the page/i);
   assert.doesNotMatch(search.description, /scrapeOptions/);
-  assert.match(search.description, /firecrawl_scrape with an alexandria body/);
-  assert.match(search.description, /firecrawl_find_tools/);
+  assert.match(search.description, /alexandria_library_read runs a selected capability/);
+  assert.match(search.description, /alexandria_library_search explores the whole library/);
+  assert.doesNotMatch(search.description, /firecrawl_find_tools|alexandria body/);
   assert.match(search.description, /ranked results with query-relevant highlights[.;]/i);
   assert.match(
     search.inputSchema.properties.highlights.description,
@@ -1266,7 +1268,7 @@ test('primary search profile agent language satisfies metadata policy gates', as
   const initialize = await initializeProfile(port, SEARCH_ENDPOINT, headers);
   const tools = await listToolDefinitions(port, SEARCH_ENDPOINT, headers);
 
-  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true, tools: 'dedicated' });
   assertAgentMetadataPolicy(
     [initialize.instructions, ...tools.map((tool) => tool.description ?? '')],
     assert
@@ -1449,7 +1451,7 @@ test('search-only surface rejects catalogue browsing and preserves semantic plus
   const searchTool = listing.result.tools.find(tool => tool.name === 'firecrawl_search');
   assert.ok(searchTool, 'firecrawl_search must be listed');
   assert.doesNotMatch(searchTool.description, /cannot execute tools|full MCP surface/);
-  assert.match(searchTool.description, /firecrawl_scrape with an alexandria body/);
+  assert.match(searchTool.description, /alexandria_library_read runs a selected capability/);
 
   const call = arguments_ => jsonRpc(searchPort, SEARCH_ENDPOINT, {id:77,method:'tools/call', params:{name:'firecrawl_search',arguments:arguments_},headers:{'x-api-key':'fc-search-key'}});
   const invalid = parseSseJson(await (await call({query:'podcast episodes',sources:[{type:'alexandria',mode:'browse'}]})).text());
@@ -1480,31 +1482,39 @@ test('ordinary search profile enables semantic and domain tools by default', asy
   assert.equal(sent.domainTools, true);
 });
 
-test('search surface registers the two Alexandria tools with surface-scoped copy', async (t) => {
+test('search surface lists the Alexandria library tools and points every description at them', async (t) => {
   const { searchPort } = await startHostedServer(t);
   const headers = { 'x-api-key': 'fc-test' };
   const initialize = await initializeProfile(searchPort, SEARCH_ENDPOINT, headers);
   const tools = await listToolDefinitions(searchPort, SEARCH_ENDPOINT, headers);
-  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true });
+  assertAlexandriaMetadata(tools, initialize.instructions, { hosted: true, tools: 'dedicated' });
+  assert.doesNotMatch(JSON.stringify({ instructions: initialize.instructions, tools }), /find_tools|find-tools|findTools|Find Tools/);
   // Claude Code truncates tool descriptions at CLAUDE_CODE_TEXT_CAP characters.
   for (const tool of tools) {
     assert.ok((tool.description ?? '').length <= CLAUDE_CODE_TEXT_CAP, `${tool.name} description is ${(tool.description ?? '').length} chars`);
   }
   const scrape = tools.find((tool) => tool.name === 'firecrawl_scrape');
-  const findTools = tools.find((tool) => tool.name === 'firecrawl_find_tools');
   assert.ok(scrape);
-  assert.ok(findTools);
   // Descriptions on this surface name only tools it registers.
-  for (const tool of [scrape, findTools]) {
-    assert.doesNotMatch(
-      tool.description,
-      /firecrawl_(?:crawl|map|interact|monitor|agent|feedback|parse)/,
-      tool.name
-    );
-    assert.doesNotMatch(tool.description, /scrapeId/, tool.name);
-  }
-  assert.ok(scrape.inputSchema.properties.alexandria, 'alexandria body is accepted');
+  assert.doesNotMatch(scrape.description, /firecrawl_(?:crawl|map|interact|monitor|agent|feedback|parse)/);
+  assert.doesNotMatch(scrape.description, /scrapeId/);
+  assert.match(scrape.description, /alexandria_library_search/);
   assert.ok(scrape.inputSchema.properties.url, 'url mode is accepted');
+});
+
+test('search surface still answers firecrawl_find_tools for clients that cached it', async (t) => {
+  const backend = await startFakeBackend();
+  t.after(() => backend.close());
+  const { searchPort } = await startHostedServer(t, { FIRECRAWL_API_URL: backend.url });
+  const res = await jsonRpc(searchPort, SEARCH_ENDPOINT, {
+    id: 78,
+    method: 'tools/call',
+    params: { name: 'firecrawl_find_tools', arguments: { providers: ['fred'] } },
+    headers: { 'x-api-key': 'fc-search-key' },
+  });
+  const message = parseSseJson(await res.text());
+  assert.equal(message.error, undefined, JSON.stringify(message));
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
 });
 
 test('search surface executes an Alexandria capability through firecrawl_scrape without a feedback pointer', async (t) => {
