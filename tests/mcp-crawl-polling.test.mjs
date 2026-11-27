@@ -11,7 +11,7 @@ import {
 
 const CRAWL_ID = 'crawl-1';
 
-async function startCrawlApi(startRefusal) {
+async function startCrawlApi(startRefusal, paging = 'normal') {
   const requests = [];
   let statusReads = 0;
   const server = createServer(async (req, res) => {
@@ -26,7 +26,18 @@ async function startCrawlApi(startRefusal) {
       if (startRefusal) return json(startRefusal.status, { success: false, error: startRefusal.error });
       return json(200, { success: true, id: CRAWL_ID });
     }
+    if (req.url === `/v2/crawl/${CRAWL_ID}?skip=2`) {
+      // Cycling cursor: points back at the page that led here.
+      return json(200, { success: true, data: [{ markdown: 'page three' }], next: `${base}/v2/crawl/${CRAWL_ID}?skip=1` });
+    }
     if (req.url === `/v2/crawl/${CRAWL_ID}?skip=1`) {
+      if (paging === 'stuck') {
+        // Unmoving cursor: every read hands back its own URL as `next`.
+        return json(200, { success: true, data: [{ markdown: 'page two' }], next: `${base}/v2/crawl/${CRAWL_ID}?skip=1` });
+      }
+      if (paging === 'cycle') {
+        return json(200, { success: true, data: [{ markdown: 'page two' }], next: `${base}/v2/crawl/${CRAWL_ID}?skip=2` });
+      }
       return json(200, { success: true, data: [{ markdown: 'page two' }], next: null });
     }
     if (req.url === `/v2/crawl/${CRAWL_ID}`) {
@@ -122,4 +133,28 @@ test('crawl waits out a rate-limited status read and pages results only once it 
   assert.equal(statusReads.length, 3);
   assert.ok(statusReads[2].at - statusReads[1].at >= 1000, 'the read after a 429 waits for Retry-After');
   assert.equal(api.requests.filter(({ url }) => url.endsWith('?skip=1')).length, 1);
+});
+
+test('crawl stops paging when the API keeps returning the same next cursor', async (t) => {
+  const api = await startCrawlApi(undefined, 'stuck');
+  t.after(() => api.close());
+  const message = await callCrawl(t, api);
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  const result = JSON.parse(message.result.content[0].text);
+  assert.equal(result.status, 'completed');
+  assert.deepEqual(result.data.map((doc) => doc.markdown), ['page one', 'page two']);
+  assert.equal(result.next, null);
+  assert.equal(api.requests.filter(({ url }) => url.endsWith('?skip=1')).length, 1);
+});
+
+test('crawl stops paging when next cursors cycle back to a visited page', async (t) => {
+  const api = await startCrawlApi(undefined, 'cycle');
+  t.after(() => api.close());
+  const message = await callCrawl(t, api);
+  assert.notEqual(message.result?.isError, true, JSON.stringify(message));
+  const result = JSON.parse(message.result.content[0].text);
+  assert.deepEqual(result.data.map((doc) => doc.markdown), ['page one', 'page two', 'page three']);
+  assert.equal(result.next, null);
+  assert.equal(api.requests.filter(({ url }) => url.endsWith('?skip=1')).length, 1);
+  assert.equal(api.requests.filter(({ url }) => url.endsWith('?skip=2')).length, 1);
 });
