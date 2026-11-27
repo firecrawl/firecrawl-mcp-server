@@ -14,6 +14,7 @@ import {
   type ContentResult,
   type DeferredResult,
   type Logger,
+  type McpExtension,
   McpRuntime,
   type ModernRequest,
   type Tool,
@@ -462,6 +463,11 @@ export interface FirecrawlMcpServerHooks {
   listEarlierAlexandriaTools?: boolean;
   /** Adds HTTP routes. Runs before the built-in routes, so its routes win. */
   configureHttp?: (app: HttpApp) => void;
+  /**
+   * Extensions of protocol revision 2026-07-28 served after the built-in ones,
+   * advertised in `server/discover`. Needs `modernProtocol`.
+   */
+  extensions?: McpExtension<SessionData>[];
   /** Serve OAuth protected-resource metadata for this instance. */
   oauth?: { protectedResource: ProtectedResourceMetadata };
 }
@@ -548,8 +554,8 @@ export interface FirecrawlMcpServer {
  * entry point.
  */
 export { normalizeHeader, withoutTrailingSlash } from './headers.js';
-export { acceptedContent, inputRequired, inputResponse } from '@modelcontextprotocol/server';
-export type { DeferredResult, ModernRequest } from './mcp/runtime.js';
+export { acceptedContent, inputRequired, inputResponse, ProtocolError } from '@modelcontextprotocol/server';
+export type { DeferredResult, McpExtension, ModernRequest } from './mcp/runtime.js';
 export type { TaskCaller, TaskHandler, TaskState } from './tasks.js';
 export type { SkillDefinition } from './skills.js';
 export { TASKS_EXTENSION } from './tasks.js';
@@ -866,6 +872,7 @@ export function createFirecrawlMcpServer(
         },
         taskHandlers
       ),
+      ...(hooks.extensions ?? []),
       ...(skillCatalog ? [skillsExtension<SessionData>(skillCatalog, hooks.serveSkills)] : []),
     ],
     // Lightweight health endpoint for LB checks
