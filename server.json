@@ -3,7 +3,7 @@
   "name": "io.github.firecrawl/firecrawl-mcp-server",
   "title": "Firecrawl MCP Server",
   "description": "Search, scrape, and crawl the web, plus Firecrawl Alexandria, our library of everything else.",
-  "version": "3.41.0",
+  "version": "3.42.0",
   "repository": {
     "url": "https://github.com/firecrawl/firecrawl-mcp-server.git",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "npm",
       "identifier": "firecrawl-mcp",
-      "version": "3.41.0",
+      "version": "3.42.0",
       "transport": {
         "type": "stdio"
       },

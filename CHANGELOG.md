@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [3.42.0] - 2026-11-27
 
 ### Added
 
@@ -13,6 +13,7 @@
 
 ### Changed
 
+- The search companion that `CLOUD_SERVICE=true` starts lists `alexandria_library_search` and `alexandria_library_read`, as the full surface does, and no longer lists `firecrawl_find_tools`. Its server instructions, `firecrawl_search` description and parameter text, empty-query error and `firecrawl_scrape` description name the library tools, and its `firecrawl_scrape` lists `url` only. The full and keyless surfaces are unchanged.
 - `@modelcontextprotocol/server` and `@modelcontextprotocol/client` 2.4.0, the release that adds the Skills extension.
 - `alexandria_library_search`'s description opens with the data source instead of the skills. Its first sentence now says to find the data source for the task first, with `grep -ril "<word>" /library`; the skills under `/library/skills` come second, for a step-by-step workflow or to explore, with the same `cat /library/skills/search/<words>` lookup. The server instructions of sessions that list the skills change the same way: their sentence on checking `/library/skills` first now names the data source first and the skills second. The opening is as long as before, everything after it is unchanged, and so are the input schema, the annotations and the tool's behaviour.
 - `people_company_enrich`'s description no longer says a work email is always on the company domain when one is known. It says the address is on the company domain when one is found there, and that otherwise an address at another employer may be returned with `domain_match` false and `warning` `"employer_mismatch"` in `fields.work_email`, to be treated as unconfirmed. Only the description text changes; the input and output schemas and the tool's behaviour are unchanged.
