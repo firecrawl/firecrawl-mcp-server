@@ -367,6 +367,7 @@ test('a toolFilter that leaves alexandria_library_read out keeps firecrawl_scrap
   assert.equal(fixed.names.includes('alexandria_library_read'), false);
   assert.ok('alexandria' in fixed.scrape.inputSchema.properties);
   assert.doesNotMatch([fixed.instructions, fixed.scrape.description].join('\n'), /alexandria_library_read/);
+  assert.doesNotMatch(fixed.instructions, /firecrawl_find_tools/);
 
   // Admitting one of the two new tools is not enough: find_tools would be unlisted with nothing in its place.
   const half = await listed({ toolFilter: (name) => name !== 'alexandria_library_search' });
