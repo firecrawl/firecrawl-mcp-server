@@ -259,6 +259,16 @@ test('a retained alexandria_library_read answer carries a bounded preview of eac
   );
 });
 
+test('a retained preview cuts long text before a character the cut would split', async (t) => {
+  const text = `${'a'.repeat(1999)}😀${'b'.repeat(90_000)}`;
+  const large = { success: true, data: { creditsCost: 5, alexandria: [{ ...EXCHANGE_CALL, data: { text } }] } };
+  const { client } = await startStdioWithApi(t, { largeResult: large, bashRecovery: 'available' });
+  const result = toolText(await call(client, 'alexandria_library_read', { calls: [EXCHANGE_CALL] }));
+  assert.equal(result.delivery, 'retained');
+  const { head } = result.data.alexandria[0];
+  assert.equal(head.text, `${'a'.repeat(1999)}…[+90002 chars]`);
+});
+
 test('a retained answer quotes odd keys safely and reads a list the head left out from its first row', async (t) => {
   const keys = Object.fromEntries(Array.from({ length: 45 }, (_, i) => [`k${String(i).padStart(2, '0')}`, i]));
   const rows = Array.from({ length: 1000 }, (_, id) => ({ id, text: 't'.repeat(200) }));
